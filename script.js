@@ -10,6 +10,7 @@ class ElectroStreamApp {
         this.isPlaying = false;
         this.currentCategory = 'electronic';
         this.favorites = new Set();
+        this.currentStationList = [];
         
         this.init();
     }
@@ -129,6 +130,9 @@ class ElectroStreamApp {
                 this.electronicStations = [...this.electronicStations, ...stations];
             }
 
+            // Remove duplicates
+            this.electronicStations = this.removeDuplicates(this.electronicStations);
+            
             this.stations = [...this.electronicStations, ...this.topStations];
             
             this.displayFeaturedElectronic();
@@ -143,6 +147,23 @@ class ElectroStreamApp {
         this.hideLoading();
     }
 
+    removeDuplicates(stations) {
+        const unique = new Map();
+        stations.forEach(station => {
+            if (!unique.has(station.stationuuid)) {
+                unique.set(station.stationuuid, station);
+            }
+        });
+        return Array.from(unique.values());
+    }
+
+    getStationImage(station) {
+        if (station.favicon && station.favicon !== '') {
+            return `<img src="${station.favicon}" alt="${station.name}" loading="lazy" onerror="this.parentElement.innerHTML='📻'">`;
+        }
+        return '📻';
+    }
+
     displayFeaturedElectronic() {
         const container = document.getElementById('featuredElectronic');
         container.innerHTML = '';
@@ -154,12 +175,14 @@ class ElectroStreamApp {
             card.className = 'featured-card';
             
             card.innerHTML = `
-                <div class="featured-avatar">⚡</div>
+                <div class="featured-avatar">
+                    ${this.getStationImage(station)}
+                </div>
                 <h3>${station.name}</h3>
                 <p>${station.tags ? station.tags.split(',')[0] : 'Electronic'}</p>
             `;
             
-            card.addEventListener('click', () => this.playStation(station));
+            card.addEventListener('click', () => this.playStation(station, featured));
             container.appendChild(card);
         });
     }
@@ -176,14 +199,16 @@ class ElectroStreamApp {
             
             item.innerHTML = `
                 <div class="rank ${rankClass}">${index + 1}</div>
-                <div class="station-avatar">📻</div>
+                <div class="station-avatar">
+                    ${this.getStationImage(station)}
+                </div>
                 <div class="station-info">
                     <h3>${station.name}</h3>
                     <p>${station.country || 'Unknown'} - ${station.bitrate || 'Live'} kbps</p>
                 </div>
             `;
             
-            item.addEventListener('click', () => this.playStation(station));
+            item.addEventListener('click', () => this.playStation(station, this.topStations));
             container.appendChild(item);
         });
     }
@@ -198,6 +223,8 @@ class ElectroStreamApp {
             const card = this.createStationCard(station);
             container.appendChild(card);
         });
+        
+        this.currentStationList = trending;
     }
 
     createStationCard(station) {
@@ -209,7 +236,9 @@ class ElectroStreamApp {
         }
         
         card.innerHTML = `
-            <div class="station-avatar">⚡</div>
+            <div class="station-avatar">
+                ${this.getStationImage(station)}
+            </div>
             <div class="station-info">
                 <h3>${station.name}</h3>
                 <p>${station.country || 'Unknown'} - ${station.state || ''}</p>
@@ -220,7 +249,7 @@ class ElectroStreamApp {
             </div>
         `;
         
-        card.addEventListener('click', () => this.playStation(station));
+        card.addEventListener('click', () => this.playStation(station, this.currentStationList));
         return card;
     }
 
@@ -248,7 +277,9 @@ class ElectroStreamApp {
         
         document.getElementById('emptyState').style.display = 'none';
         
-        searchResults.slice(0, 30).forEach(station => {
+        this.currentStationList = searchResults.slice(0, 30);
+        
+        this.currentStationList.forEach(station => {
             container.appendChild(this.createStationCard(station));
         });
         
@@ -277,7 +308,9 @@ class ElectroStreamApp {
         
         document.getElementById('emptyState').style.display = 'none';
         
-        filtered.slice(0, 30).forEach(station => {
+        this.currentStationList = filtered.slice(0, 30);
+        
+        this.currentStationList.forEach(station => {
             container.appendChild(this.createStationCard(station));
         });
         
@@ -306,8 +339,9 @@ class ElectroStreamApp {
         this.displayTrending();
     }
 
-    async playStation(station) {
+    async playStation(station, stationList) {
         this.currentStation = station;
+        this.currentStationList = stationList || this.currentStationList;
         
         try {
             this.audio.src = station.url_resolved || station.url;
@@ -320,9 +354,31 @@ class ElectroStreamApp {
             
             this.showToast(`Now playing: ${station.name}`);
             
+            // Update all station cards
+            this.refreshStationCards();
+            
         } catch (error) {
             console.error('Error playing station:', error);
             this.showToast('Failed to play station');
+        }
+    }
+
+    refreshStationCards() {
+        // Re-display current view with updated playing state
+        if (document.getElementById('featuredElectronic').parentElement.style.display !== 'none') {
+            this.displayFeaturedElectronic();
+        }
+        
+        if (document.getElementById('top50List').parentElement.style.display !== 'none') {
+            this.displayTop50();
+        }
+        
+        if (document.getElementById('trendingList').parentElement.style.display !== 'none') {
+            const container = document.getElementById('trendingList');
+            container.innerHTML = '';
+            this.currentStationList.forEach(station => {
+                container.appendChild(this.createStationCard(station));
+            });
         }
     }
 
@@ -337,22 +393,26 @@ class ElectroStreamApp {
     }
 
     playPrevious() {
-        const currentIndex = this.stations.findIndex(s => 
+        if (!this.currentStationList.length) return;
+        
+        const currentIndex = this.currentStationList.findIndex(s => 
             s.stationuuid === this.currentStation?.stationuuid
         );
         
         if (currentIndex > 0) {
-            this.playStation(this.stations[currentIndex - 1]);
+            this.playStation(this.currentStationList[currentIndex - 1], this.currentStationList);
         }
     }
 
     playNext() {
-        const currentIndex = this.stations.findIndex(s => 
+        if (!this.currentStationList.length) return;
+        
+        const currentIndex = this.currentStationList.findIndex(s => 
             s.stationuuid === this.currentStation?.stationuuid
         );
         
-        if (currentIndex < this.stations.length - 1) {
-            this.playStation(this.stations[currentIndex + 1]);
+        if (currentIndex < this.currentStationList.length - 1) {
+            this.playStation(this.currentStationList[currentIndex + 1], this.currentStationList);
         }
     }
 
@@ -370,6 +430,14 @@ class ElectroStreamApp {
             document.getElementById('playerName').textContent = this.currentStation.name;
             document.getElementById('playerGenre').textContent = 
                 this.currentStation.tags ? this.currentStation.tags.split(',')[0] : 'Electronic Music';
+            
+            // Update mini player avatar with real image
+            const miniAvatar = document.getElementById('miniAvatar');
+            miniAvatar.innerHTML = this.getStationImage(this.currentStation);
+            
+            // Update full player artwork with real image
+            const playerArtwork = document.getElementById('playerArtwork');
+            playerArtwork.innerHTML = this.getStationImage(this.currentStation);
             
             // Update tags
             const tagsContainer = document.getElementById('playerTags');
