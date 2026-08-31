@@ -171,24 +171,25 @@ var genreFactors = {
     'lounge': 0.5, 'ambient': 0.4, 'disco': 0.7
 };
 
+// ============ GÊNEROS COM TRADUÇÃO ============
 var genres = [
-    {name:'All', tag:'all', emoji:'🌍'},
-    {name:'Most Played', tag:'mostplayed', emoji:'📊'},
-    {name:'Dance', tag:'dance', emoji:'💃'},
-    {name:'Electronic', tag:'electronic', emoji:'⚡'},
-    {name:'House', tag:'house', emoji:'🏠'},
-    {name:'Techno', tag:'techno', emoji:'🔊'},
-    {name:'Trance', tag:'trance', emoji:'🌀'},
-    {name:'EDM', tag:'edm', emoji:'🎆'},
-    {name:'Pop', tag:'pop', emoji:'🎵'},
-    {name:'Rock', tag:'rock', emoji:'🎸'},
-    {name:'Jazz', tag:'jazz', emoji:'🎷'},
-    {name:'Classical', tag:'classical', emoji:'🎻'},
-    {name:'Hip Hop', tag:'hiphop', emoji:'🎤'},
-    {name:'Country', tag:'country', emoji:'🌾'},
-    {name:'News', tag:'news', emoji:'📰'},
-    {name:'Sports', tag:'sport', emoji:'⚽'},
-    {name:'Reggae', tag:'reggae', emoji:'🌴'}
+    {name:'All', tag:'all', emoji:'🌍', translations: {'en': 'All', 'pt': 'Todas', 'es': 'Todas', 'fr': 'Toutes'}},
+    {name:'Most Played', tag:'mostplayed', emoji:'📊', translations: {'en': 'Most Played', 'pt': 'Mais Ouvidas', 'es': 'Más Escuchadas', 'fr': 'Plus Écoutées'}},
+    {name:'Dance', tag:'dance', emoji:'💃', translations: {'en': 'Dance', 'pt': 'Dance', 'es': 'Dance', 'fr': 'Dance'}},
+    {name:'Electronic', tag:'electronic', emoji:'⚡', translations: {'en': 'Electronic', 'pt': 'Eletrônica', 'es': 'Electrónica', 'fr': 'Électronique'}},
+    {name:'House', tag:'house', emoji:'🏠', translations: {'en': 'House', 'pt': 'House', 'es': 'House', 'fr': 'House'}},
+    {name:'Techno', tag:'techno', emoji:'🔊', translations: {'en': 'Techno', 'pt': 'Techno', 'es': 'Techno', 'fr': 'Techno'}},
+    {name:'Trance', tag:'trance', emoji:'🌀', translations: {'en': 'Trance', 'pt': 'Trance', 'es': 'Trance', 'fr': 'Trance'}},
+    {name:'EDM', tag:'edm', emoji:'🎆', translations: {'en': 'EDM', 'pt': 'EDM', 'es': 'EDM', 'fr': 'EDM'}},
+    {name:'Pop', tag:'pop', emoji:'🎵', translations: {'en': 'Pop', 'pt': 'Pop', 'es': 'Pop', 'fr': 'Pop'}},
+    {name:'Rock', tag:'rock', emoji:'🎸', translations: {'en': 'Rock', 'pt': 'Rock', 'es': 'Rock', 'fr': 'Rock'}},
+    {name:'Jazz', tag:'jazz', emoji:'🎷', translations: {'en': 'Jazz', 'pt': 'Jazz', 'es': 'Jazz', 'fr': 'Jazz'}},
+    {name:'Classical', tag:'classical', emoji:'🎻', translations: {'en': 'Classical', 'pt': 'Clássica', 'es': 'Clásica', 'fr': 'Classique'}},
+    {name:'Hip Hop', tag:'hiphop', emoji:'🎤', translations: {'en': 'Hip Hop', 'pt': 'Hip Hop', 'es': 'Hip Hop', 'fr': 'Hip Hop'}},
+    {name:'Country', tag:'country', emoji:'🌾', translations: {'en': 'Country', 'pt': 'Country', 'es': 'Country', 'fr': 'Country'}},
+    {name:'News', tag:'news', emoji:'📰', translations: {'en': 'News', 'pt': 'Notícias', 'es': 'Noticias', 'fr': 'Actualités'}},
+    {name:'Sports', tag:'sport', emoji:'⚽', translations: {'en': 'Sports', 'pt': 'Esportes', 'es': 'Deportes', 'fr': 'Sports'}},
+    {name:'Reggae', tag:'reggae', emoji:'🌴', translations: {'en': 'Reggae', 'pt': 'Reggae', 'es': 'Reggae', 'fr': 'Reggae'}}
 ];
 
 // ============ TRADUÇÃO ============
@@ -203,18 +204,17 @@ function t(key) {
     return (translationsData[currentLanguage] && translationsData[currentLanguage][key]) || translationsData['en'][key] || key;
 }
 
+function getGenreName(genre) {
+    if (genre.translations && genre.translations[currentLanguage]) {
+        return genre.translations[currentLanguage];
+    }
+    return genre.name;
+}
+
 function applyTranslations() {
     var searchInput = document.getElementById('searchInput');
     if (searchInput) searchInput.placeholder = t('search');
-    document.querySelectorAll('.chip').forEach(function(chip) {
-        var text = chip.textContent.trim();
-        if (text.indexOf('All') !== -1 || text.indexOf('Todas') !== -1 || text.indexOf('Toutes') !== -1) {
-            chip.textContent = '🌍 ' + t('all');
-        }
-        if (text.indexOf('Most Played') !== -1 || text.indexOf('Mais Ouvidas') !== -1 || text.indexOf('Más') !== -1) {
-            chip.textContent = '📊 ' + t('mostPlayed');
-        }
-    });
+    renderGenres();
 }
 
 function setLanguage(lang) {
@@ -710,14 +710,14 @@ function goToPage(page) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ============ GENRES ============
+// ============ GENRES (COM TRADUÇÃO) ============
 function renderGenres() {
     var scroll = document.getElementById('genresScroll');
     scroll.innerHTML = '';
     genres.forEach(function(g) {
         var chip = document.createElement('button');
         chip.className = 'chip' + (g.tag === currentGenre ? ' active' : '');
-        chip.textContent = g.emoji + ' ' + g.name;
+        chip.textContent = g.emoji + ' ' + getGenreName(g);
         chip.onclick = function() {
             currentGenre = g.tag;
             document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('active'); });
