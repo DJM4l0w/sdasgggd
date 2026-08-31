@@ -13,65 +13,55 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
+    <link rel="preconnect" href="https://de1.api.radio-browser.info">
+    <link rel="dns-prefetch" href="https://de1.api.radio-browser.info">
 </head>
 <body>
-    <!-- Header -->
     <header class="header">
         <div class="header-top">
             <h1 class="logo">📻 M4FM<span>CLUB</span></h1>
-            <button class="fav-btn" onclick="showFavorites()">
-                ❤️ <span id="favCount">0</span>
-            </button>
+            <button class="fav-btn" onclick="showFavorites()" aria-label="Favorites">❤️ <span id="favCount">0</span></button>
         </div>
         <div class="search-box">
-            <span class="search-icon">🔍</span>
-            <input type="search" id="searchInput" placeholder="Search stations..." oninput="doSearch(this.value)" autocomplete="off">
+            <span>🔍</span>
+            <input type="search" id="searchInput" placeholder="Search stations..." oninput="doSearch(this.value)" autocomplete="off" enterkeyhint="search">
         </div>
     </header>
 
-    <!-- Genres -->
     <div class="genres-scroll" id="genresScroll"></div>
 
-    <!-- Main Content -->
     <main class="main-content">
         <h2 class="section-title" id="listTitle">Loading stations...</h2>
         <div id="stationList" class="station-list"></div>
         <div id="pagination" class="pagination"></div>
     </main>
 
-    <!-- Mini Player -->
     <div class="mini-player" id="miniPlayer" style="display:none;" onclick="openPlayer()">
         <div class="mini-img" id="miniImg">📻</div>
         <div class="mini-info">
             <h4 id="miniName">Station</h4>
             <p id="miniStatus">Playing...</p>
         </div>
-        <button class="mini-btn" id="miniPlayBtn" onclick="event.stopPropagation();togglePlay()">⏸️</button>
+        <button class="mini-btn" id="miniPlayBtn" onclick="event.stopPropagation();togglePlay()" aria-label="Play/Pause">⏸️</button>
     </div>
 
-    <!-- Full Player Modal -->
     <div class="player-modal" id="playerModal" style="display:none;">
         <div class="modal-backdrop" onclick="closePlayer()"></div>
         <div class="player-sheet">
             <div class="grabber"></div>
-            <button class="close-btn" onclick="closePlayer()">✕</button>
-            
+            <button class="close-btn" onclick="closePlayer()" aria-label="Close">✕</button>
             <div class="player-artwork" id="playerArtwork">📻</div>
-            
             <h2 class="player-name" id="playerName">Station Name</h2>
             <p class="player-info" id="playerInfo">Info</p>
-            
             <div class="controls">
-                <button class="ctrl-btn" onclick="prevStation()">⏮</button>
-                <button class="play-btn" id="mainPlayBtn" onclick="togglePlay()">⏸️</button>
-                <button class="ctrl-btn" onclick="nextStation()">⏭</button>
+                <button class="ctrl-btn" onclick="prevStation()" aria-label="Previous">⏮</button>
+                <button class="play-btn" id="mainPlayBtn" onclick="togglePlay()" aria-label="Play/Pause">⏸️</button>
+                <button class="ctrl-btn" onclick="nextStation()" aria-label="Next">⏭</button>
             </div>
-            
             <div class="volume-box">
                 <span>🔊</span>
-                <input type="range" min="0" max="100" value="80" oninput="setVolume(this.value)">
+                <input type="range" min="0" max="100" value="80" oninput="setVolume(this.value)" aria-label="Volume">
             </div>
-            
             <div class="actions">
                 <button class="action-btn" id="favBtn" onclick="toggleFavorite()">🤍 Favorite</button>
                 <button class="action-btn" onclick="shareStation()">📤 Share</button>
@@ -79,9 +69,8 @@
         </div>
     </div>
 
-    <!-- Toast -->
     <div class="toast" id="toast"></div>
 
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
