@@ -94,12 +94,38 @@
                 <span class="eq-bar"></span>
             </div>
             
+            <!-- Indicador de Buffering -->
+            <div class="buffering-indicator" id="bufferingIndicator" style="display:none;">
+                <div class="spinner"></div>
+                <span id="bufferingText">Buffering...</span>
+            </div>
+            
             <h2 class="player-name" id="playerName">Station Name</h2>
             <p class="player-info" id="playerInfo">Info</p>
             
             <div class="player-status">
                 <span class="live-badge">🔴 LIVE</span>
                 <span class="listeners-count" id="playerLiveCount">🌍 0</span>
+            </div>
+            
+            <!-- Detalhes da Estação -->
+            <div class="station-details">
+                <div class="detail-item">
+                    <span class="detail-label" id="labelCountry">🌍 Country:</span>
+                    <span class="detail-value" id="detailCountry">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label" id="labelBitrate">📡 Bitrate:</span>
+                    <span class="detail-value" id="detailBitrate">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label" id="labelGenre">🎵 Genre:</span>
+                    <span class="detail-value" id="detailGenre">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label" id="labelLanguage">🔗 Language:</span>
+                    <span class="detail-value" id="detailLanguage">-</span>
+                </div>
             </div>
             
             <div class="controls">
@@ -125,6 +151,12 @@
                 <button onclick="setSleep(30)">30 min</button>
                 <button onclick="setSleep(60)">1 hour</button>
                 <button onclick="cancelSleep()">Cancel</button>
+            </div>
+            
+            <!-- Histórico de Estações -->
+            <div class="history-section">
+                <h3 class="history-title" id="historyTitle">📜 Recent</h3>
+                <div class="history-list" id="historyList"></div>
             </div>
         </div>
     </div>
