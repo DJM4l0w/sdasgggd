@@ -118,8 +118,3 @@ input[type="text"],
 input[type="search"] {
     font-size: 16px !important;
 }
-/* Bloquear pull to refresh */
-html, body {
-    overscroll-behavior-y: none !important;
-    overscroll-behavior-x: none !important;
-}
