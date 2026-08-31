@@ -811,7 +811,7 @@ function filterStations() {
     goToPage(1);
 }
 
-// ============ MOST PLAYED (PAÍS + MUNDIAL + DINÂMICO) CORRIGIDO ============
+// ============ MOST PLAYED CORRIGIDO ============
 function showMostPlayed() {
     if (mostPlayedInterval) clearInterval(mostPlayedInterval);
     var listElement = document.getElementById('stationList');
@@ -820,19 +820,18 @@ function showMostPlayed() {
     getUserCountry().then(function(userCountry) {
         console.log('🌍 País detectado:', userCountry);
         
-        // URL CORRIGIDA
         var countryUrl = userCountry ? 
             API + '/stations/bycountrycodeexact/' + userCountry + '?limit=100&hidebroken=true&order=clickcount&reverse=true' : '';
         
         var countryPromise = countryUrl ? 
             fetch(countryUrl)
                 .then(function(r) { return r.json(); })
-                .catch(function() { return []; }) : 
+                .catch(function(err) { console.log('Erro país:', err); return []; }) : 
             Promise.resolve([]);
         
         var worldPromise = fetch(API + '/stations/topclick/100?hidebroken=true')
             .then(function(r) { return r.json(); })
-            .catch(function() { return []; });
+            .catch(function(err) { console.log('Erro mundial:', err); return []; });
         
         Promise.all([countryPromise, worldPromise]).then(function(results) {
             var countryTop = results[0] || [];
@@ -846,7 +845,7 @@ function showMostPlayed() {
             var combined = countryTop.concat(worldFiltered);
             
             if (combined.length === 0) {
-                combined = allStations.filter(function(s) { return s.url_resolved; }).slice(0, 100);
+                combined = allStations.filter(function(s) { return s && s.url_resolved; }).slice(0, 100);
             }
             
             if (combined.length === 0) {
@@ -861,7 +860,6 @@ function showMostPlayed() {
             totalPages = Math.ceil(combined.length / PAGE_SIZE);
             listElement.innerHTML = '';
             document.getElementById('listTitle').textContent = '📊 Top 100 Most Played';
-            document.getElementById('playCount').textContent = combined.length;
             setupPagination();
             goToPage(1);
             
