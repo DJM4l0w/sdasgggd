@@ -1,72 +1,92 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0a0a0f">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>RadioHub - World Radio</title>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="M4FMCLUB">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="M4FMCLUB - Ouça milhares de rádios online grátis no seu celular">
+    <title>M4FMCLUB - Rádios Online</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
+    <!-- Header Fixo -->
     <header class="header">
         <div class="header-top">
-            <h1 class="logo">📻 Radio<span>Hub</span></h1>
-            <button class="fav-btn" onclick="showFavorites()">❤️ <span id="favCount">0</span></button>
+            <h1 class="logo">📻 M4FM<span>CLUB</span></h1>
+            <button class="fav-btn" onclick="showFavorites()">
+                ❤️ <span id="favCount">0</span>
+            </button>
         </div>
         <div class="search-box">
-            <span>🔍</span>
-            <input type="text" id="searchInput" placeholder="Search stations, countries..." oninput="doSearch(this.value)">
+            <span class="search-icon">🔍</span>
+            <input type="search" id="searchInput" placeholder="Buscar rádios..." oninput="doSearch(this.value)" autocomplete="off">
         </div>
     </header>
 
+    <!-- Gêneros -->
     <div class="genres-scroll" id="genresScroll"></div>
 
+    <!-- Lista -->
     <main class="main-content">
-        <h2 class="section-title" id="listTitle">🌍 World Stations</h2>
+        <h2 class="section-title" id="listTitle">🌍 Rádios do Mundo</h2>
         <div id="stationList" class="station-list"></div>
         <div id="loadingMore" style="display:none;text-align:center;padding:20px;">
             <div class="spinner"></div>
         </div>
         <div id="endMessage" style="display:none;text-align:center;padding:20px;color:#606070;">
-            🎉 End of list
+            🎉 Fim da lista
         </div>
     </main>
 
+    <!-- Mini Player -->
     <div class="mini-player" id="miniPlayer" style="display:none;" onclick="openPlayer()">
         <div class="mini-img" id="miniImg">📻</div>
         <div class="mini-info">
-            <h4 id="miniName">Station</h4>
-            <p id="miniStatus">Playing...</p>
+            <h4 id="miniName">Rádio</h4>
+            <p id="miniStatus">Tocando...</p>
         </div>
         <button class="mini-btn" id="miniPlayBtn" onclick="event.stopPropagation();togglePlay()">⏸️</button>
     </div>
 
+    <!-- Player Fullscreen -->
     <div class="player-modal" id="playerModal" style="display:none;">
         <div class="modal-backdrop" onclick="closePlayer()"></div>
         <div class="player-sheet">
             <div class="grabber"></div>
             <button class="close-btn" onclick="closePlayer()">✕</button>
+            
             <div class="player-artwork" id="playerArtwork">📻</div>
-            <h2 id="playerName">Station</h2>
-            <p id="playerInfo">Info</p>
+            
+            <h2 class="player-name" id="playerName">Rádio</h2>
+            <p class="player-info" id="playerInfo">Info</p>
+            
             <div class="controls">
-                <button onclick="prevStation()">⏮</button>
+                <button class="ctrl-btn" onclick="prevStation()">⏮</button>
                 <button class="play-btn" id="mainPlayBtn" onclick="togglePlay()">⏸️</button>
-                <button onclick="nextStation()">⏭</button>
+                <button class="ctrl-btn" onclick="nextStation()">⏭</button>
             </div>
+            
             <div class="volume-box">
                 <span>🔊</span>
                 <input type="range" min="0" max="100" value="80" oninput="setVolume(this.value)">
             </div>
+            
             <div class="actions">
-                <button id="favBtn" onclick="toggleFavorite()">🤍 Favorite</button>
-                <button onclick="shareStation()">📤 Share</button>
+                <button class="action-btn" id="favBtn" onclick="toggleFavorite()">🤍 Favoritar</button>
+                <button class="action-btn" onclick="shareStation()">📤 Compartilhar</button>
             </div>
         </div>
     </div>
 
+    <!-- Toast -->
     <div class="toast" id="toast"></div>
+
     <script src="script.js"></script>
 </body>
 </html>
