@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Stream over 8,000 radio stations worldwide for free">
+    <title>RadioStream - 8,000+ Live Stations</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-top">
+            <div class="logo">
+                <span class="logo-icon">📻</span>
+                <span class="logo-text">Radio<span>Stream</span></span>
+            </div>
+            <button class="icon-btn" id="menuBtn" aria-label="Open menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 12H21M3 6H21M3 18H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="search-container">
+            <div class="search-bar">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+                    <path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <input type="search" id="searchInput" placeholder="Search stations..." autocomplete="off">
+                <button class="clear-btn" id="clearBtn" style="display: none;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Categories -->
+    <nav class="categories" id="categoriesNav">
+        <button class="category-btn active" data-category="all">All</button>
+        <button class="category-btn" data-category="pop">Pop</button>
+        <button class="category-btn" data-category="rock">Rock</button>
+        <button class="category-btn" data-category="jazz">Jazz</button>
+        <button class="category-btn" data-category="classical">Classical</button>
+        <button class="category-btn" data-category="electronic">Electronic</button>
+        <button class="category-btn" data-category="hiphop">Hip Hop</button>
+        <button class="category-btn" data-category="news">News</button>
+        <button class="category-btn" data-category="sports">Sports</button>
+        <button class="category-btn" data-category="country">Country</button>
+    </nav>
+
+    <!-- Sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Menu</h2>
+            <button class="icon-btn" id="closeSidebarBtn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h3>Library</h3>
+                <button class="sidebar-item" id="favoritesBtn">
+                    <span class="sidebar-icon">❤️</span>
+                    <span>Favorites</span>
+                    <span class="badge" id="favoritesCount">0</span>
+                </button>
+                <button class="sidebar-item" id="recentBtn">
+                    <span class="sidebar-icon">🕐</span>
+                    <span>Recently Played</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Discover</h3>
+                <button class="sidebar-item" id="topStationsBtn">
+                    <span class="sidebar-icon">🏆</span>
+                    <span>Top Stations</span>
+                </button>
+                <button class="sidebar-item" id="trendingBtn">
+                    <span class="sidebar-icon">📈</span>
+                    <span>Trending</span>
+                </button>
+                <button class="sidebar-item" id="byCountryBtn">
+                    <span class="sidebar-icon">🌍</span>
+                    <span>By Country</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Settings</h3>
+                <button class="sidebar-item" id="downloadBtn">
+                    <span class="sidebar-icon">⬇️</span>
+                    <span>Download Stations</span>
+                </button>
+                <button class="sidebar-item" id="aboutBtn">
+                    <span class="sidebar-icon">ℹ️</span>
+                    <span>About</span>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Loading State -->
+        <div class="loading-state" id="loadingState">
+            <div class="spinner"></div>
+            <p>Loading stations...</p>
+        </div>
+
+        <!-- Station List -->
+        <div class="station-list" id="stationList"></div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-icon">🔍</div>
+            <h3>No stations found</h3>
+            <p>Try a different search term or category</p>
+        </div>
+    </main>
+
+    <!-- Mini Player -->
+    <div class="mini-player" id="miniPlayer" style="display: none;">
+        <div class="mini-player-content">
+            <div class="mini-player-info">
+                <div class="station-avatar" id="miniStationAvatar">📻</div>
+                <div class="station-info">
+                    <h4 id="miniStationName">Station Name</h4>
+                    <p id="miniStationGenre">Genre</p>
+                </div>
+            </div>
+            <button class="mini-play-btn" id="miniPlayBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Full Player -->
+    <div class="full-player" id="fullPlayer" style="display: none;">
+        <div class="player-overlay"></div>
+        
+        <div class="player-content">
+            <button class="close-player-btn" id="closePlayerBtn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+            
+            <div class="player-artwork">
+                <div class="artwork-circle" id="playerArtwork">
+                    <div class="artwork-inner">📻</div>
+                </div>
+            </div>
+            
+            <div class="player-details">
+                <h2 id="playerStationName">Station Name</h2>
+                <p id="playerStationInfo">Station Info</p>
+                <div class="station-tags" id="playerTags"></div>
+            </div>
+            
+            <div class="player-progress">
+                <span class="time" id="currentTime">0:00</span>
+                <div class="progress-track">
+                    <div class="progress-fill" id="playerProgressFill"></div>
+                </div>
+                <span class="time" id="totalTime">Live</span>
+            </div>
+            
+            <div class="player-controls">
+                <button class="control-btn" id="shuffleBtn" aria-label="Shuffle">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                
+                <button class="control-btn" id="prevBtn" aria-label="Previous">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                    </svg>
+                </button>
+                
+                <button class="play-btn" id="playBtn" aria-label="Play">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </button>
+                
+                <button class="control-btn" id="nextBtn" aria-label="Next">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/>
+                    </svg>
+                </button>
+                
+                <button class="control-btn" id="repeatBtn" aria-label="Repeat">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M17 2l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M3 11v-1a4 4 0 014-4h14M7 22l-4-4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M21 13v1a4 4 0 01-4 4H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="volume-control">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80">
+            </div>
+            
+            <button class="favorite-btn" id="favoriteBtn">
+                <span class="heart-icon">🤍</span>
+                <span>Add to Favorites</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Download Modal -->
+    <div class="modal" id="downloadModal" style="display: none;">
+        <div class="modal-backdrop" id="modalBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Download Stations</h2>
+                <button class="icon-btn" id="closeDownloadBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Download stations for offline listening</p>
+                
+                <div class="form-group">
+                    <label>Number of Stations</label>
+                    <div class="options-grid">
+                        <button class="option-btn" data-value="100">100</button>
+                        <button class="option-btn" data-value="500">500</button>
+                        <button class="option-btn" data-value="1000">1K</button>
+                        <button class="option-btn" data-value="5000">5K</button>
+                        <button class="option-btn active" data-value="8000">8K</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="includeImages" checked>
+                        <span>Include station images</span>
+                    </label>
+                </div>
+                
+                <div class="download-progress" id="downloadProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="downloadProgressFill"></div>
+                    </div>
+                    <p id="downloadStatus">0% complete</p>
+                </div>
+                
+                <button class="btn-primary" id="startDownloadBtn">Start Download</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
