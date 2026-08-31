@@ -289,5 +289,21 @@
     } else {
         init();
     }
+    // ============ BLOQUEAR PULL TO REFRESH NO MOBILE ============
+let startY = 0;
+
+document.addEventListener('touchstart', function(e) {
+    startY = e.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+    const touchY = e.touches[0].clientY;
+    const deltaY = touchY - startY;
+    
+    // Se está no topo e puxando para baixo
+    if (window.scrollY <= 0 && deltaY > 0) {
+        e.preventDefault();
+    }
+}, { passive: false });
     
 })();
