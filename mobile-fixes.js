@@ -9,23 +9,19 @@
     
     // ============ CORREÇÃO DE MEMORY LEAK ============
     function fixMemoryLeaks() {
-        // Limpar intervalos quando a página for ocultada
         document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
-                // Pausar simulação quando página estiver oculta
                 if (typeof simulationInterval !== 'undefined' && simulationInterval) {
                     clearInterval(simulationInterval);
                     simulationInterval = null;
                 }
             } else {
-                // Reiniciar simulação quando voltar
                 if (typeof startGlobalSimulation === 'function' && !simulationInterval) {
                     startGlobalSimulation();
                 }
             }
         });
         
-        // Limpar tudo quando a página for fechada
         window.addEventListener('beforeunload', function() {
             if (typeof simulationInterval !== 'undefined' && simulationInterval) {
                 clearInterval(simulationInterval);
@@ -68,13 +64,12 @@
     function optimizeSimulation() {
         if (!isMobile) return;
         
-        // Reduzir frequência da simulação no mobile
         const originalStartSimulation = window.startGlobalSimulation;
         
         if (typeof originalStartSimulation === 'function') {
             window.startGlobalSimulation = function() {
                 if (simulationInterval) clearInterval(simulationInterval);
-                simulationInterval = setInterval(updateSimulation, 5000); // 5 segundos no mobile
+                simulationInterval = setInterval(updateSimulation, 5000);
                 
                 document.addEventListener('visibilitychange', function() {
                     if (document.hidden) {
@@ -86,7 +81,6 @@
             };
         }
         
-        // Limitar número de estações simuladas
         const originalUpdateSimulation = window.updateSimulation;
         
         if (typeof originalUpdateSimulation === 'function') {
@@ -96,7 +90,6 @@
                 const dayFactor = getDayFactor(now.getDay());
                 const keys = Object.keys(globalSimulation);
                 
-                // No mobile, limitar a 100 estações simuladas
                 const maxSimulations = 100;
                 const limitedKeys = keys.slice(0, maxSimulations);
                 
@@ -119,7 +112,6 @@
     
     // ============ LAZY LOADING DE IMAGENS ============
     function setupLazyLoading() {
-        // Usar Intersection Observer para lazy loading
         if ('IntersectionObserver' in window) {
             const imageObserver = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
@@ -134,14 +126,12 @@
                 });
             }, { rootMargin: '50px' });
             
-            // Observar imagens que ainda não carregaram
             const observeImages = () => {
                 document.querySelectorAll('img[data-src]').forEach(img => {
                     imageObserver.observe(img);
                 });
             };
             
-            // Observer para novos cards
             const listObserver = new MutationObserver(observeImages);
             const stationList = document.getElementById('stationList');
             if (stationList) {
@@ -152,9 +142,7 @@
     
     // ============ MELHORAR ÁUDIO EM BACKGROUND ============
     function setupBackgroundAudio() {
-        // Garantir que o áudio continue tocando
         if ('mediaSession' in navigator && typeof audio !== 'undefined') {
-            // Atualizar metadata quando a estação mudar
             const originalPlayStation = window.playStation;
             
             if (typeof originalPlayStation === 'function') {
@@ -178,21 +166,17 @@
     function optimizePerformance() {
         if (!isMobile) return;
         
-        // Adicionar classe para CSS mobile
         document.body.classList.add('mobile-device');
         
-        // Reduzir tamanho da página no mobile
         if (typeof PAGE_SIZE !== 'undefined') {
             PAGE_SIZE = 20;
         }
         
-        // Usar passive event listeners
         const scrollElements = document.querySelectorAll('.genres-scroll, .station-list');
         scrollElements.forEach(el => {
             el.addEventListener('scroll', () => {}, { passive: true });
         });
         
-        // Prevenir zoom em double-tap
         document.addEventListener('dblclick', (e) => {
             e.preventDefault();
         }, { passive: false });
@@ -206,7 +190,6 @@
                     if (battery.level < 0.2 && !battery.charging) {
                         document.body.classList.add('power-saving');
                         
-                        // Reduzir ainda mais a simulação
                         if (typeof simulationInterval !== 'undefined' && simulationInterval) {
                             clearInterval(simulationInterval);
                             simulationInterval = setInterval(updateSimulation, 10000);
@@ -214,7 +197,6 @@
                     } else {
                         document.body.classList.remove('power-saving');
                         
-                        // Restaurar simulação normal
                         if (typeof simulationInterval !== 'undefined' && simulationInterval) {
                             clearInterval(simulationInterval);
                             simulationInterval = setInterval(updateSimulation, 5000);
@@ -231,11 +213,9 @@
     
     // ============ CORREÇÕES DE TRATAMENTO DE ERROS ============
     function setupErrorHandling() {
-        // Capturar erros globais
         window.addEventListener('error', function(e) {
             console.error('Erro capturado:', e.error);
             
-            // Tentar recuperar
             if (typeof showToast === 'function') {
                 const translations = {
                     'pt': 'Erro recuperado',
@@ -248,53 +228,28 @@
             }
         });
         
-        // Tratar promessas rejeitadas
         window.addEventListener('unhandledrejection', function(e) {
             console.warn('Promise rejeitada:', e.reason);
             e.preventDefault();
         });
     }
     
-    // ============ BLOQUEAR PULL TO REFRESH (SCROLL NORMAL FUNCIONA) ============
+    // ============ BLOQUEAR PULL TO REFRESH (SÓ CSS - NÃO TRAVA SCROLL) ============
     function setupPullToRefreshPrevention() {
-        if (!isMobile) return;
-        
-        // Usar CSS para bloquear (não interfere no scroll)
-        document.body.style.overscrollBehaviorY = 'none';
+        // Aplicar CSS diretamente - NÃO interfere no scroll
         document.documentElement.style.overscrollBehaviorY = 'none';
+        document.documentElement.style.overscrollBehaviorX = 'none';
+        document.body.style.overscrollBehaviorY = 'none';
+        document.body.style.overscrollBehaviorX = 'none';
+        document.body.style.overscrollBehavior = 'none';
         
-        // Para Chrome Android - bloquear gesto de puxar
-        let startY = 0;
-        let isPullingDown = false;
-        
-        document.addEventListener('touchstart', function(e) {
-            startY = e.touches[0].clientY;
-            isPullingDown = false;
-        }, { passive: true });
-        
-        document.addEventListener('touchmove', function(e) {
-            const touchY = e.touches[0].clientY;
-            const deltaY = touchY - startY;
-            
-            // Só bloqueia se estiver NO TOPO e puxando PARA BAIXO
-            if (window.scrollY === 0 && deltaY > 0) {
-                isPullingDown = true;
-                e.preventDefault();
-            }
-        }, { passive: false });
-        
-        document.addEventListener('touchend', function() {
-            isPullingDown = false;
-        });
-        
-        console.log('🔒 Pull to refresh bloqueado (scroll normal funciona)');
+        console.log('🔒 Pull to refresh bloqueado (CSS)');
     }
     
     // ============ INICIALIZAÇÃO ============
     function init() {
         console.log('🚀 M4FMCLUB Mobile Fixes carregado');
         
-        // Aplicar correções
         fixMemoryLeaks();
         setupDebouncedSearch();
         optimizeSimulation();
