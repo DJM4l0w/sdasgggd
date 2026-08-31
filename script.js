@@ -1253,6 +1253,55 @@ function clearSearch() {
     });
     filterStations();
 }
+// ============ SHARE ============
+function shareStation() {
+    
+}
+
+// ============ SEARCH ============
+function doSearch(query) {
+    // ... código existente ...
+}
+
+function clearSearch() {
+    
+}
+
+// ============ VOLTAR PARA TELA INICIAL ============
+function goHome() {
+    searchQuery = '';
+    var searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    
+    currentGenre = 'all';
+    document.querySelectorAll('.chip').forEach(function(c) {
+        c.classList.remove('active');
+        if (c.textContent.indexOf('All') !== -1 || 
+            c.textContent.indexOf('Todas') !== -1 || 
+            c.textContent.indexOf('Toutes') !== -1) {
+            c.classList.add('active');
+        }
+    });
+    
+    if (mostPlayedInterval) {
+        clearInterval(mostPlayedInterval);
+        mostPlayedInterval = null;
+    }
+    
+    currentList = allStations;
+    currentPage = 1;
+    totalPages = Math.ceil(allStations.length / PAGE_SIZE);
+    
+    var listElement = document.getElementById('stationList');
+    if (listElement) listElement.innerHTML = '';
+    
+    var titleElement = document.getElementById('listTitle');
+    if (titleElement) titleElement.textContent = '🌍 ' + allStations.length + ' ' + t('stations');
+    
+    setupPagination();
+    goToPage(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded', function() {
