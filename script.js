@@ -18,6 +18,47 @@ var db = null;
 var sleepTimer = null;
 var playHistory = JSON.parse(localStorage.getItem('m4fmPlayHistory') || '{}');
 var myIP = localStorage.getItem('m4fmUserIP') || '';
+var globalSimulation = JSON.parse(localStorage.getItem('m4fmGlobalSim') || '{}');
+var simulationInterval = null;
+
+// ============ TODOS OS PAÍSES (195) ============
+var countryFactors = {
+    'BR': 2800, 'US': 3500, 'GB': 3200, 'DE': 3000, 'FR': 2800,
+    'ES': 2200, 'PT': 1400, 'IT': 2000, 'NL': 1600, 'BE': 1000,
+    'CA': 1500, 'AU': 1600, 'AR': 1200, 'MX': 1600, 'CL': 900,
+    'CO': 1100, 'PE': 800, 'VE': 700, 'EC': 600, 'BO': 500,
+    'PY': 500, 'UY': 400, 'JP': 1800, 'KR': 1200, 'CN': 2500,
+    'IN': 2200, 'PK': 800, 'BD': 600, 'RU': 2000, 'UA': 800,
+    'PL': 1200, 'CZ': 700, 'SK': 500, 'HU': 600, 'RO': 800,
+    'BG': 500, 'HR': 400, 'SI': 300, 'RS': 500, 'GR': 800,
+    'SE': 900, 'NO': 700, 'DK': 700, 'FI': 600, 'IS': 100,
+    'IE': 800, 'CH': 900, 'AT': 800, 'NZ': 500, 'ZA': 800,
+    'EG': 900, 'NG': 1000, 'KE': 500, 'ET': 500, 'GH': 400,
+    'TZ': 400, 'UG': 300, 'MA': 700, 'DZ': 600, 'TN': 500,
+    'LY': 300, 'AO': 400, 'MZ': 400, 'ZM': 200, 'ZW': 200,
+    'TH': 800, 'VN': 700, 'PH': 800, 'MY': 700, 'SG': 500,
+    'ID': 1500, 'MM': 400, 'KH': 300, 'LA': 200, 'TW': 700,
+    'HK': 400, 'MO': 100, 'MN': 200, 'KZ': 500, 'UZ': 400,
+    'TM': 200, 'KG': 200, 'TJ': 200, 'AF': 300, 'IR': 600,
+    'IQ': 500, 'SY': 200, 'LB': 300, 'IL': 600, 'JO': 300,
+    'SA': 700, 'AE': 600, 'QA': 200, 'KW': 200, 'BH': 100,
+    'OM': 200, 'YE': 200, 'CY': 200, 'MT': 100, 'LU': 200,
+    'IS': 100, 'EE': 200, 'LV': 200, 'LT': 300, 'BY': 500,
+    'MD': 300, 'AL': 200, 'MK': 200, 'BA': 300, 'ME': 100,
+    'XK': 100, 'GE': 200, 'AM': 200, 'AZ': 300
+};
+
+// ============ FATORES POR GÊNERO ============
+var genreFactors = {
+    'pop': 1.5, 'rock': 1.3, 'electronic': 1.2, 'dance': 1.4,
+    'jazz': 0.7, 'classical': 0.6, 'news': 1.1, 'sport': 1.0,
+    'hiphop': 1.2, 'country': 0.8, 'reggae': 0.7, 'edm': 1.3,
+    'house': 1.1, 'techno': 1.0, 'trance': 0.9, 'latin': 0.8,
+    'folk': 0.7, 'metal': 0.9, 'indie': 0.8, 'blues': 0.6,
+    'funk': 0.8, 'soul': 0.7, 'rnb': 1.0, 'rap': 1.1,
+    'punk': 0.7, 'alternative': 0.8, 'christian': 0.6,
+    'lounge': 0.5, 'ambient': 0.4, 'disco': 0.7
+};
 
 var genres = [
     {name:'All', tag:'all', emoji:'🌍'},
@@ -47,7 +88,145 @@ document.addEventListener('DOMContentLoaded', function() {
     setupAutoRefresh();
     hideSplashScreen();
     getUserIP();
+    startGlobalSimulation();
 });
+
+// ============ SISTEMA DE SIMULAÇÃO GLOBAL ============
+function startGlobalSimulation() {
+    simulationInterval = setInterval(function() {
+        updateSimulation();
+    }, 4000);
+}
+
+function getSimulationData(station) {
+    var key = station.stationuuid;
+    
+    if (!globalSimulation[key]) {
+        var base = calculateBaseListeners(station);
+        var peak = Math.floor(base * (1.5 + Math.random()));
+        
+        globalSimulation[key] = {
+            name: station.name,
+            country: station.country || '',
+            baseListeners: base,
+            peakListeners: peak,
+            currentListeners: Math.floor(base + Math.random() * (peak - base) * 0.5),
+            lastUpdate: Date.now()
+        };
+        
+        localStorage.setItem('m4fmGlobalSim', JSON.stringify(globalSimulation));
+    }
+    
+    return globalSimulation[key];
+}
+
+function calculateBaseListeners(station) {
+    var base = 50;
+    
+    // Fator por país
+    if (station.countrycode && countryFactors[station.countrycode]) {
+        base = countryFactors[station.countrycode];
+    } else {
+        base = Math.floor(Math.random() * 500) + 100;
+    }
+    
+    // Fator por votos
+    if (station.votes) {
+        base += Math.min(station.votes, 3000);
+    }
+    
+    // Fator por bitrate
+    if (station.bitrate > 128) base *= 1.2;
+    if (station.bitrate < 64) base *= 0.7;
+    
+    // Fator por gênero
+    if (station.tags) {
+        var tags = station.tags.toLowerCase().split(',');
+        tags.forEach(function(tag) {
+            tag = tag.trim();
+            if (genreFactors[tag]) base *= genreFactors[tag];
+        });
+    }
+    
+    return Math.max(20, Math.floor(base));
+}
+
+function updateSimulation() {
+    var now = new Date();
+    var hour = now.getHours();
+    var hourFactor = getHourFactor(hour);
+    
+    // Atualizar TODAS as estações na simulação
+    Object.keys(globalSimulation).forEach(function(key) {
+        var station = globalSimulation[key];
+        var target = station.baseListeners * hourFactor + (Math.random() * 200 - 100);
+        target = Math.max(20, Math.min(station.peakListeners, target));
+        
+        var diff = target - station.currentListeners;
+        station.currentListeners += diff * 0.2;
+        station.currentListeners = Math.floor(station.currentListeners);
+        station.lastUpdate = Date.now();
+    });
+    
+    // Salvar
+    localStorage.setItem('m4fmGlobalSim', JSON.stringify(globalSimulation));
+    
+    // Atualizar UI
+    updateCardsWithSimulation();
+    updatePlayerWithSimulation();
+}
+
+function getHourFactor(hour) {
+    if (hour >= 20 && hour <= 23) return 1.5;
+    if (hour >= 0 && hour <= 5) return 0.5;
+    if (hour >= 6 && hour <= 9) return 1.2;
+    if (hour >= 10 && hour <= 14) return 1.0;
+    if (hour >= 15 && hour <= 19) return 1.3;
+    return 1.0;
+}
+
+function updateCardsWithSimulation() {
+    document.querySelectorAll('.station-card').forEach(function(card) {
+        var uuid = card.dataset.uuid;
+        var simData = globalSimulation[uuid];
+        
+        if (simData) {
+            var countSpan = card.querySelector('.live-count');
+            
+            if (!countSpan) {
+                countSpan = document.createElement('span');
+                countSpan.className = 'live-count';
+                countSpan.style.cssText = 'color:#00f5d4;font-size:10px;font-weight:600;display:block;margin-top:2px;';
+                card.querySelector('.station-info').appendChild(countSpan);
+            }
+            
+            countSpan.textContent = '🌍 ' + formatNumber(simData.currentListeners) + ' listening now';
+        }
+    });
+}
+
+function updatePlayerWithSimulation() {
+    if (!currentStation) return;
+    
+    var simData = globalSimulation[currentStation.stationuuid];
+    if (!simData) return;
+    
+    var playerLiveCount = document.getElementById('playerLiveCount');
+    if (playerLiveCount) {
+        playerLiveCount.textContent = '🌍 ' + formatNumber(simData.currentListeners) + ' listening now';
+    }
+    
+    var miniLiveCount = document.getElementById('miniLiveCount');
+    if (miniLiveCount) {
+        miniLiveCount.textContent = '🌍 ' + formatNumber(simData.currentListeners) + ' listening';
+    }
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return Math.floor(num).toString();
+}
 
 // ============ GET USER IP ============
 async function getUserIP() {
@@ -530,7 +709,7 @@ function updatePlayCount() {
     if (countElement) countElement.textContent = count;
 }
 
-// ============ CREATE CARD ============
+// ============ CREATE CARD (COM SIMULAÇÃO) ============
 function createCard(station) {
     var card = document.createElement('div');
     card.className = 'station-card';
@@ -542,12 +721,17 @@ function createCard(station) {
     var isFav = favorites.has(station.stationuuid);
     var playCount = playHistory[station.stationuuid] ? playHistory[station.stationuuid].playCount : 0;
     
+    // OBTER DADOS DA SIMULAÇÃO
+    var simData = getSimulationData(station);
+    var liveCount = simData ? simData.currentListeners : Math.floor(Math.random() * 1000) + 50;
+    
     card.innerHTML = 
         '<div class="station-img">' + img + '</div>' +
         '<div class="station-info">' +
             '<h3>' + station.name + '</h3>' +
             '<p>' + (station.country || '') + (station.bitrate ? ' · ' + station.bitrate + 'kbps' : '') + '</p>' +
-            (playCount > 0 ? '<span class="play-count">🔊 ' + playCount + ' plays</span>' : '') +
+            '<span class="live-count" style="color:#00f5d4;font-size:10px;font-weight:600;display:block;margin-top:2px;">🌍 ' + formatNumber(liveCount) + ' listening now</span>' +
+            (playCount > 0 ? '<span class="play-count" style="color:#6c63ff;font-size:10px;">🔊 ' + playCount + ' plays</span>' : '') +
         '</div>' +
         '<button class="card-fav" data-uuid="' + station.stationuuid + '">' + (isFav ? '❤️' : '🤍') + '</button>';
     
@@ -640,6 +824,7 @@ function playStation(station) {
         updatePlayerUI();
         updateMediaSession();
         trackPlay(station);
+        updatePlayerWithSimulation();
         showToast('▶️ ' + station.name);
         document.querySelectorAll('.station-card').forEach(function(c) { c.classList.remove('playing'); });
         var card = document.querySelector('[data-uuid="' + station.stationuuid + '"]');
