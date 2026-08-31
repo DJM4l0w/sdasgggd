@@ -16,7 +16,6 @@ var isApiLoading = false;
 var hasInitialLoaded = false;
 var db = null;
 var sleepTimer = null;
-var playHistory = JSON.parse(localStorage.getItem('m4fmPlayHistory') || '{}');
 var myIP = localStorage.getItem('m4fmUserIP') || '';
 var globalSimulation = JSON.parse(localStorage.getItem('m4fmGlobalSim') || '{}');
 var simulationInterval = null;
@@ -510,7 +509,6 @@ function loadCachedStations() {
                 setupPagination();
                 goToPage(1);
                 updateFavCount();
-                updatePlayCount();
                 setTimeout(refreshFromAPI, 1000);
             } else {
                 loadFromAPI();
@@ -524,7 +522,6 @@ function loadFromAPI() {
     renderGenres();
     loadTop30First();
     updateFavCount();
-    updatePlayCount();
 }
 
 function saveToCache(stations) {
@@ -814,15 +811,21 @@ function filterStations() {
     goToPage(1);
 }
 
-// ============ MOST PLAYED (PAÍS + MUNDIAL + DINÂMICO) ============
+// ============ MOST PLAYED (PAÍS + MUNDIAL + DINÂMICO) CORRIGIDO ============
 function showMostPlayed() {
     if (mostPlayedInterval) clearInterval(mostPlayedInterval);
     var listElement = document.getElementById('stationList');
     listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">' + t('loading') + '</p></div>';
     
     getUserCountry().then(function(userCountry) {
-        var countryPromise = userCountry ? 
-            fetch(API + '/stations/bycountrycodeexact/' + userCountry + '/topclick/100?hidebroken=true')
+        console.log('🌍 País detectado:', userCountry);
+        
+        // URL CORRIGIDA
+        var countryUrl = userCountry ? 
+            API + '/stations/bycountrycodeexact/' + userCountry + '?limit=100&hidebroken=true&order=clickcount&reverse=true' : '';
+        
+        var countryPromise = countryUrl ? 
+            fetch(countryUrl)
                 .then(function(r) { return r.json(); })
                 .catch(function() { return []; }) : 
             Promise.resolve([]);
@@ -834,10 +837,17 @@ function showMostPlayed() {
         Promise.all([countryPromise, worldPromise]).then(function(results) {
             var countryTop = results[0] || [];
             var worldTop = results[1] || [];
+            
+            console.log('📊 Top país:', countryTop.length, '| Top mundial:', worldTop.length);
+            
             var countryIds = {};
             countryTop.forEach(function(s) { countryIds[s.stationuuid] = true; });
             var worldFiltered = worldTop.filter(function(s) { return !countryIds[s.stationuuid]; });
             var combined = countryTop.concat(worldFiltered);
+            
+            if (combined.length === 0) {
+                combined = allStations.filter(function(s) { return s.url_resolved; }).slice(0, 100);
+            }
             
             if (combined.length === 0) {
                 listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">📊 ' + t('history') + '</p>';
@@ -851,6 +861,7 @@ function showMostPlayed() {
             totalPages = Math.ceil(combined.length / PAGE_SIZE);
             listElement.innerHTML = '';
             document.getElementById('listTitle').textContent = '📊 Top 100 Most Played';
+            document.getElementById('playCount').textContent = combined.length;
             setupPagination();
             goToPage(1);
             
@@ -871,12 +882,6 @@ function showMostPlayed() {
             }, 3000);
         });
     });
-}
-
-function updatePlayCount() {
-    var count = Object.keys(playHistory).length;
-    var countElement = document.getElementById('playCount');
-    if (countElement) countElement.textContent = count;
 }
 
 // ============ CREATE CARD ============
@@ -968,7 +973,6 @@ function playStation(station) {
         document.getElementById('miniPlayer').style.display = 'flex';
         updatePlayerUI();
         updateMediaSession();
-        trackPlay(station);
         updatePlayerWithSimulation();
         showToast('▶️ ' + station.name);
         document.querySelectorAll('.station-card').forEach(function(c) { c.classList.remove('playing'); });
@@ -978,25 +982,6 @@ function playStation(station) {
         clearTimeout(timeout);
         showToast('❌ ' + t('error'));
     });
-}
-
-function trackPlay(station) {
-    if (!playHistory[station.stationuuid]) {
-        playHistory[station.stationuuid] = {
-            name: station.name,
-            country: station.country,
-            favicon: station.favicon,
-            url_resolved: station.url_resolved,
-            bitrate: station.bitrate,
-            tags: station.tags,
-            playCount: 0,
-            lastPlayed: Date.now()
-        };
-    }
-    playHistory[station.stationuuid].playCount++;
-    playHistory[station.stationuuid].lastPlayed = Date.now();
-    localStorage.setItem('m4fmPlayHistory', JSON.stringify(playHistory));
-    updatePlayCount();
 }
 
 function togglePlay() {
@@ -1096,6 +1081,7 @@ document.addEventListener('DOMContentLoaded', function() {
     hideSplashScreen();
     getUserIP();
     startGlobalSimulation();
+    document.getElementById('playCount').textContent = 100;
 });
 
 // ============ AUDIO EVENTS ============
