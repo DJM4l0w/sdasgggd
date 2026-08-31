@@ -71,27 +71,60 @@
         <button class="mini-btn" id="miniPlayBtn" onclick="event.stopPropagation();togglePlay()" aria-label="Play/Pause">⏸️</button>
     </div>
 
+    <!-- ============ PLAYER MODAL PREMIUM ============ -->
     <div class="player-modal" id="playerModal" style="display:none;">
         <div class="modal-backdrop" onclick="closePlayer()"></div>
         <div class="player-sheet">
-            <div class="grabber"></div>
+            <div class="grabber" onclick="closePlayer()"></div>
             <button class="close-btn" onclick="closePlayer()" aria-label="Close">✕</button>
-            <div class="player-artwork" id="playerArtwork">📻</div>
+            
+            <!-- Capa da rádio girando -->
+            <div class="player-artwork-container" onclick="togglePlay()" title="Play/Pause">
+                <div class="player-artwork" id="playerArtwork">📻</div>
+            </div>
+            
+            <!-- Equalizador -->
+            <div class="player-equalizer">
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+            </div>
+            
             <h2 class="player-name" id="playerName">Station Name</h2>
             <p class="player-info" id="playerInfo">Info</p>
-            <p id="playerLiveCount" style="color:#00f5d4;font-size:12px;font-weight:600;text-align:center;margin-bottom:10px;">🌍 0 listening now</p>
+            
+            <div class="player-status">
+                <span class="live-badge">🔴 LIVE</span>
+                <span class="listeners-count" id="playerLiveCount">🌍 0</span>
+            </div>
+            
             <div class="controls">
                 <button class="ctrl-btn" onclick="prevStation()" aria-label="Previous">⏮</button>
-                <button class="play-btn" id="mainPlayBtn" onclick="togglePlay()" aria-label="Play/Pause">⏸️</button>
+                <button class="play-btn" id="mainPlayBtn" onclick="togglePlay()" aria-label="Play/Pause">▶️</button>
                 <button class="ctrl-btn" onclick="nextStation()" aria-label="Next">⏭</button>
             </div>
+            
             <div class="volume-box">
-                <span>🔊</span>
-                <input type="range" min="0" max="100" value="80" oninput="setVolume(this.value)" aria-label="Volume">
+                <span class="volume-icon" id="volumeIcon" onclick="toggleMute()">🔊</span>
+                <input type="range" min="0" max="100" value="80" oninput="setVolume(this.value)" id="volumeSlider" aria-label="Volume">
+                <button class="mute-btn" onclick="toggleMute()">🔇</button>
             </div>
+            
             <div class="actions">
                 <button class="action-btn" id="favBtn" onclick="toggleFavorite()">🤍 Favorite</button>
                 <button class="action-btn" onclick="shareStation()">📤 Share</button>
+                <button class="action-btn" onclick="toggleSleepMenu()">😴 Sleep</button>
+            </div>
+            
+            <div class="sleep-menu" id="sleepMenu">
+                <button onclick="setSleep(15)">15 min</button>
+                <button onclick="setSleep(30)">30 min</button>
+                <button onclick="setSleep(60)">1 hour</button>
+                <button onclick="cancelSleep()">Cancel</button>
             </div>
         </div>
     </div>
