@@ -176,8 +176,6 @@
         scrollElements.forEach(el => {
             el.addEventListener('scroll', () => {}, { passive: true });
         });
-        
-        // REMOVIDO: dblclick com preventDefault
     }
     
     // ============ MONITORAMENTO DE BATERIA ============
@@ -232,6 +230,19 @@
         });
     }
     
+    // ============ BLOQUEAR PULL TO REFRESH (SEM AFETAR SCROLL) ============
+    function setupPullToRefreshPrevention() {
+        if (!isMobile) return;
+        
+        // Usar overscroll-behavior: contain (não afeta scroll)
+        document.body.style.overscrollBehaviorY = 'contain';
+        document.body.style.overscrollBehaviorX = 'none';
+        document.documentElement.style.overscrollBehaviorY = 'contain';
+        document.documentElement.style.overscrollBehaviorX = 'none';
+        
+        console.log('🔒 Pull to refresh bloqueado (sem afetar scroll)');
+    }
+    
     // ============ INICIALIZAÇÃO ============
     function init() {
         console.log('🚀 M4FMCLUB Mobile Fixes carregado');
@@ -244,6 +255,7 @@
         optimizePerformance();
         setupBatteryMonitoring();
         setupErrorHandling();
+        setupPullToRefreshPrevention();
         
         // Registrar Service Worker
         if ('serviceWorker' in navigator) {
