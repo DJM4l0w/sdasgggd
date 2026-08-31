@@ -37,9 +37,47 @@ var genres = [
 
 document.addEventListener('DOMContentLoaded', function() {
     initDB();
+    setupSearchEvents();
 });
 
-// ============ INDEXEDDB PARA CACHE ============
+// ============ SEARCH EVENTS (ENTER PARA FECHAR) ============
+function setupSearchEvents() {
+    var searchInput = document.getElementById('searchInput');
+    if (!searchInput) return;
+    
+    // Fechar com Enter
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchInput.blur(); // Fecha o teclado
+            
+            if (searchInput.value.trim() === '') {
+                clearSearch();
+            }
+        }
+        
+        if (e.key === 'Escape') {
+            clearSearch();
+            searchInput.blur();
+        }
+    });
+    
+    // Limpar quando ficar vazio
+    searchInput.addEventListener('input', function() {
+        if (this.value.trim() === '') {
+            clearSearch();
+        }
+    });
+    
+    // Fechar teclado quando clicar fora
+    document.addEventListener('click', function(e) {
+        if (e.target !== searchInput && !e.target.closest('.search-box')) {
+            searchInput.blur();
+        }
+    });
+}
+
+// ============ INDEXEDDB ============
 function initDB() {
     var request = indexedDB.open('M4FMCLUB_DB', 1);
     
@@ -56,12 +94,10 @@ function initDB() {
     };
     
     request.onerror = function(e) {
-        console.error('DB error:', e);
         loadFromAPI();
     };
 }
 
-// ============ CARREGAR DO CACHE PRIMEIRO ============
 function loadCachedStations() {
     var transaction = db.transaction(['stations'], 'readonly');
     var store = transaction.objectStore('stations');
@@ -71,7 +107,6 @@ function loadCachedStations() {
         var cached = request.result;
         
         if (cached && cached.length > 0) {
-            console.log('✅ Loaded ' + cached.length + ' stations from cache');
             allStations = cached;
             currentList = cached;
             
@@ -85,7 +120,6 @@ function loadCachedStations() {
             updateFavCount();
             bindPlayerFavButton();
             
-            // Atualizar em background
             setTimeout(function() {
                 refreshFromAPI();
             }, 1000);
@@ -99,7 +133,6 @@ function loadCachedStations() {
     };
 }
 
-// ============ CARREGAR DA API (SEM CACHE) ============
 function loadFromAPI() {
     renderGenres();
     loadTop30First();
@@ -107,7 +140,6 @@ function loadFromAPI() {
     bindPlayerFavButton();
 }
 
-// ============ SALVAR NO CACHE ============
 function saveToCache(stations) {
     if (!db) return;
     
@@ -115,7 +147,6 @@ function saveToCache(stations) {
         var transaction = db.transaction(['stations'], 'readwrite');
         var store = transaction.objectStore('stations');
         
-        // Salvar em lotes de 500 para não travar
         var batchSize = 500;
         for (var i = 0; i < stations.length; i += batchSize) {
             var batch = stations.slice(i, i + batchSize);
@@ -123,19 +154,12 @@ function saveToCache(stations) {
                 store.put(s);
             });
         }
-        
-        console.log('💾 Saved ' + stations.length + ' stations to cache');
-    } catch(e) {
-        console.log('Cache save error:', e);
-    }
+    } catch(e) {}
 }
 
-// ============ ATUALIZAR DA API EM BACKGROUND ============
 async function refreshFromAPI() {
     if (isApiLoading) return;
     isApiLoading = true;
-    
-    console.log('🔄 Refreshing from API...');
     
     var unique = {};
     allStations.forEach(function(s) { unique[s.stationuuid] = true; });
@@ -152,42 +176,11 @@ async function refreshFromAPI() {
         updatePaginationAfterBackgroundLoad();
     } catch(e) {}
     
-    var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
-    
-    for (var i = 0; i < allGenres.length; i++) {
-        try {
-            var gRes = await fetch(API + '/stations/search?tag=' + allGenres[i] + '&limit=200&hidebroken=true&order=clickcount&reverse=true');
-            var gData = await gRes.json();
-            gData.forEach(function(s) {
-                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                    unique[s.stationuuid] = true;
-                    allStations.push(s);
-                }
-            });
-            updatePaginationAfterBackgroundLoad();
-        } catch(e) {}
-    }
-    
-    var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA'];
-    
-    for (var j = 0; j < countries.length; j++) {
-        try {
-            var cRes = await fetch(API + '/stations/bycountrycodeexact/' + countries[j] + '?limit=200&hidebroken=true&order=clickcount&reverse=true');
-            var cData = await cRes.json();
-            cData.forEach(function(s) {
-                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                    unique[s.stationuuid] = true;
-                    allStations.push(s);
-                }
-            });
-            updatePaginationAfterBackgroundLoad();
-        } catch(e) {}
-    }
-    
-    // Salvar no cache após carregar tudo
-    saveToCache(allStations);
-    
     isApiLoading = false;
+    
+    setTimeout(function() {
+        loadMoreStationsWithOffset();
+    }, 1000);
 }
 
 async function loadTop30First() {
@@ -271,9 +264,64 @@ async function loadAllStationsInBackground() {
         } catch(e) {}
     }
     
-    // SALVAR NO CACHE
     saveToCache(allStations);
+    isApiLoading = false;
     
+    setTimeout(function() {
+        loadMoreStationsWithOffset();
+    }, 2000);
+}
+
+async function loadMoreStationsWithOffset() {
+    if (isApiLoading) return;
+    isApiLoading = true;
+    
+    var unique = {};
+    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
+    
+    var offset = 0;
+    var maxAttempts = 50;
+    var attempts = 0;
+    
+    while (allStations.length < 12000 && attempts < maxAttempts) {
+        try {
+            var response = await fetch(API + '/stations/search?limit=1000&offset=' + offset + '&hidebroken=true&order=clickcount&reverse=true');
+            
+            if (!response.ok) {
+                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                attempts++;
+                continue;
+            }
+            
+            var data = await response.json();
+            
+            if (data.length === 0) break;
+            
+            var added = 0;
+            data.forEach(function(s) {
+                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                    unique[s.stationuuid] = true;
+                    allStations.push(s);
+                    added++;
+                }
+            });
+            
+            if (added === 0) break;
+            
+            offset += 1000;
+            attempts = 0;
+            
+            updatePaginationAfterBackgroundLoad();
+            
+            await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+            
+        } catch(e) {
+            attempts++;
+            await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+        }
+    }
+    
+    saveToCache(allStations);
     isApiLoading = false;
 }
 
@@ -409,12 +457,15 @@ function filterStations() {
         });
     }
     
-    if (searchQuery) {
+    if (searchQuery && searchQuery.length > 0) {
         var q = searchQuery.toLowerCase();
         filtered = filtered.filter(function(s) {
-            return (s.name && s.name.toLowerCase().indexOf(q) !== -1) ||
-                   (s.country && s.country.toLowerCase().indexOf(q) !== -1) ||
-                   (s.tags && s.tags.toLowerCase().indexOf(q) !== -1);
+            var nameMatch = s.name && s.name.toLowerCase().indexOf(q) !== -1;
+            var countryMatch = s.country && s.country.toLowerCase().indexOf(q) !== -1;
+            var tagsMatch = s.tags && s.tags.toLowerCase().indexOf(q) !== -1;
+            var stateMatch = s.state && s.state.toLowerCase().indexOf(q) !== -1;
+            
+            return nameMatch || countryMatch || tagsMatch || stateMatch;
         });
     }
     
@@ -422,8 +473,19 @@ function filterStations() {
     currentPage = 1;
     totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     
-    document.getElementById('stationList').innerHTML = '';
-    document.getElementById('listTitle').textContent = filtered.length + ' Stations';
+    var listElement = document.getElementById('stationList');
+    var paginationElement = document.getElementById('pagination');
+    
+    listElement.innerHTML = '';
+    
+    if (filtered.length === 0) {
+        listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">🔍 No stations found</p>';
+        document.getElementById('listTitle').textContent = 'Search Results';
+        if (paginationElement) paginationElement.innerHTML = '';
+        return;
+    }
+    
+    document.getElementById('listTitle').textContent = '🔍 ' + filtered.length + ' Results';
     
     setupPagination();
     goToPage(1);
@@ -498,10 +560,8 @@ function toggleFav(uuid) {
     });
     
     var playerFavBtn = document.getElementById('favBtn');
-    if (playerFavBtn) {
-        if (currentStation && currentStation.stationuuid === uuid) {
-            playerFavBtn.textContent = favorites.has(uuid) ? '❤️ Favorited' : '🤍 Favorite';
-        }
+    if (playerFavBtn && currentStation && currentStation.stationuuid === uuid) {
+        playerFavBtn.textContent = favorites.has(uuid) ? '❤️ Favorited' : '🤍 Favorite';
     }
 }
 
@@ -545,6 +605,34 @@ function bindPlayerFavButton() {
             }
         });
     }
+}
+
+function doSearch(query) {
+    searchQuery = query.trim();
+    
+    if (!searchQuery) {
+        clearSearch();
+        return;
+    }
+    
+    clearTimeout(window.searchTimeout);
+    window.searchTimeout = setTimeout(function() {
+        filterStations();
+    }, 300);
+}
+
+function clearSearch() {
+    searchQuery = '';
+    var searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    
+    currentGenre = 'all';
+    document.querySelectorAll('.chip').forEach(function(c) {
+        c.classList.remove('active');
+        if (c.getAttribute('data-genre') === 'all') c.classList.add('active');
+    });
+    
+    filterStations();
 }
 
 function playStation(station) {
@@ -648,14 +736,6 @@ function shareStation() {
     }
 }
 
-function doSearch(query) {
-    searchQuery = query;
-    clearTimeout(window.searchTimeout);
-    window.searchTimeout = setTimeout(function() {
-        filterStations();
-    }, 300);
-}
-
 function showToast(msg) {
     var toast = document.getElementById('toast');
     toast.textContent = msg;
@@ -666,162 +746,3 @@ function showToast(msg) {
 
 audio.addEventListener('playing', function() { isPlaying = true; updatePlayerUI(); });
 audio.addEventListener('pause', function() { isPlaying = false; updatePlayerUI(); });
-
-// Adicione esta função para continuar carregando após travar
-
-async function loadMoreStationsWithOffset() {
-    if (isApiLoading) return;
-    isApiLoading = true;
-    
-    console.log('📡 Loading more stations with offset...');
-    
-    var unique = {};
-    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
-    
-    var offset = 0;
-    var maxAttempts = 50;
-    var attempts = 0;
-    
-    while (allStations.length < 12000 && attempts < maxAttempts) {
-        try {
-            var response = await fetch(API + '/stations/search?limit=1000&offset=' + offset + '&hidebroken=true&order=clickcount&reverse=true');
-            
-            if (!response.ok) {
-                console.log('⚠️ API rate limit reached. Waiting...');
-                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
-                attempts++;
-                continue;
-            }
-            
-            var data = await response.json();
-            
-            if (data.length === 0) break;
-            
-            var added = 0;
-            data.forEach(function(s) {
-                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                    unique[s.stationuuid] = true;
-                    allStations.push(s);
-                    added++;
-                }
-            });
-            
-            console.log('✅ Offset ' + offset + ': +' + added + ' (Total: ' + allStations.length + ')');
-            
-            if (added === 0) break;
-            
-            offset += 1000;
-            attempts = 0;
-            
-            updatePaginationAfterBackgroundLoad();
-            
-            // Pequena pausa para não sobrecarregar
-            await new Promise(function(resolve) { setTimeout(resolve, 1000); });
-            
-        } catch(e) {
-            console.log('❌ Error at offset ' + offset);
-            attempts++;
-            await new Promise(function(resolve) { setTimeout(resolve, 3000); });
-        }
-    }
-    
-    // Salvar no cache
-    saveToCache(allStations);
-    
-    isApiLoading = false;
-    console.log('🎉 Final: ' + allStations.length + ' stations');
-}
-
-// Modifique a função loadAllStationsInBackground para chamar o fallback
-async function loadAllStationsInBackground() {
-    if (isApiLoading) return;
-    isApiLoading = true;
-    
-    var unique = {};
-    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
-    
-    // Top 1000
-    try {
-        var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
-        var topData = await topRes.json();
-        topData.forEach(function(s) {
-            if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                unique[s.stationuuid] = true;
-                allStations.push(s);
-            }
-        });
-        updatePaginationAfterBackgroundLoad();
-    } catch(e) {}
-    
-    // Gêneros
-    var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
-    
-    for (var i = 0; i < allGenres.length; i++) {
-        try {
-            var gRes = await fetch(API + '/stations/search?tag=' + allGenres[i] + '&limit=200&hidebroken=true&order=clickcount&reverse=true');
-            var gData = await gRes.json();
-            gData.forEach(function(s) {
-                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                    unique[s.stationuuid] = true;
-                    allStations.push(s);
-                }
-            });
-            updatePaginationAfterBackgroundLoad();
-        } catch(e) {}
-    }
-    
-    // Países
-    var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA'];
-    
-    for (var j = 0; j < countries.length; j++) {
-        try {
-            var cRes = await fetch(API + '/stations/bycountrycodeexact/' + countries[j] + '?limit=200&hidebroken=true&order=clickcount&reverse=true');
-            var cData = await cRes.json();
-            cData.forEach(function(s) {
-                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                    unique[s.stationuuid] = true;
-                    allStations.push(s);
-                }
-            });
-            updatePaginationAfterBackgroundLoad();
-        } catch(e) {}
-    }
-    
-    saveToCache(allStations);
-    isApiLoading = false;
-    
-    // CONTINUAR CARREGANDO COM OFFSET (fallback)
-    setTimeout(function() {
-        loadMoreStationsWithOffset();
-    }, 2000);
-}
-
-// Modifique refreshFromAPI para também usar offset
-async function refreshFromAPI() {
-    if (isApiLoading) return;
-    isApiLoading = true;
-    
-    console.log('🔄 Refreshing from API...');
-    
-    var unique = {};
-    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
-    
-    try {
-        var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
-        var topData = await topRes.json();
-        topData.forEach(function(s) {
-            if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                unique[s.stationuuid] = true;
-                allStations.push(s);
-            }
-        });
-        updatePaginationAfterBackgroundLoad();
-    } catch(e) {}
-    
-    isApiLoading = false;
-    
-    // Continuar com offset
-    setTimeout(function() {
-        loadMoreStationsWithOffset();
-    }, 1000);
-}
