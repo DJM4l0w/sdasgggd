@@ -15,6 +15,9 @@ var searchQuery = '';
 var isApiLoading = false;
 var hasInitialLoaded = false;
 var db = null;
+var touchStartX = 0;
+var touchEndX = 0;
+var sleepTimer = null;
 
 var genres = [
     {name:'All', tag:'all', emoji:'🌍'},
@@ -38,8 +41,130 @@ var genres = [
 document.addEventListener('DOMContentLoaded', function() {
     initDB();
     setupSearchEvents();
+    setupSwipeGestures();
+    setupKeyboardShortcuts();
+    setupMediaSession();
+    setupAutoRefresh();
+    hideSplashScreen();
 });
 
+// ============ SPLASH SCREEN ============
+function hideSplashScreen() {
+    var splash = document.getElementById('splash');
+    if (splash) {
+        setTimeout(function() {
+            splash.style.opacity = '0';
+            setTimeout(function() {
+                splash.style.display = 'none';
+            }, 500);
+        }, 1000);
+    }
+}
+
+// ============ SWIPE GESTURES ============
+function setupSwipeGestures() {
+    document.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+    }, {passive: true});
+    
+    document.addEventListener('touchend', function(e) {
+        touchEndX = e.changedTouches[0].screenX;
+        var diff = touchStartX - touchEndX;
+        
+        if (Math.abs(diff) > 80) {
+            if (diff > 0) {
+                nextStation();
+            } else {
+                prevStation();
+            }
+        }
+    }, {passive: true});
+}
+
+// ============ KEYBOARD SHORTCUTS ============
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlay();
+        }
+        if (e.code === 'ArrowRight') nextStation();
+        if (e.code === 'ArrowLeft') prevStation();
+        if (e.code === 'KeyF') toggleFavorite();
+    });
+}
+
+// ============ MEDIA SESSION (Controle na notificação) ============
+function setupMediaSession() {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', function() {
+            if (currentStation) {
+                audio.play();
+                isPlaying = true;
+                updatePlayerUI();
+            }
+        });
+        
+        navigator.mediaSession.setActionHandler('pause', function() {
+            audio.pause();
+            isPlaying = false;
+            updatePlayerUI();
+        });
+        
+        navigator.mediaSession.setActionHandler('previoustrack', function() {
+            prevStation();
+        });
+        
+        navigator.mediaSession.setActionHandler('nexttrack', function() {
+            nextStation();
+        });
+    }
+}
+
+function updateMediaSession() {
+    if (!('mediaSession' in navigator) || !currentStation) return;
+    
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentStation.name,
+        artist: 'M4FMCLUB',
+        album: currentStation.country || 'Live Radio',
+        artwork: currentStation.favicon ? [
+            { src: currentStation.favicon, sizes: '96x96', type: 'image/png' }
+        ] : []
+    });
+}
+
+// ============ AUTO REFRESH (a cada 30 min) ============
+function setupAutoRefresh() {
+    setInterval(function() {
+        if (!isApiLoading && navigator.onLine && hasInitialLoaded) {
+            refreshFromAPI();
+        }
+    }, 30 * 60 * 1000);
+}
+
+// ============ SLEEP TIMER ============
+function setSleepTimer(minutes) {
+    clearTimeout(sleepTimer);
+    
+    showToast('⏰ Sleep timer: ' + minutes + ' min');
+    
+    sleepTimer = setTimeout(function() {
+        audio.pause();
+        isPlaying = false;
+        updatePlayerUI();
+        showToast('😴 Sleep timer ended');
+    }, minutes * 60 * 1000);
+}
+
+function cancelSleepTimer() {
+    clearTimeout(sleepTimer);
+    showToast('⏰ Sleep timer cancelled');
+}
+
+// ============ SEARCH EVENTS ============
 function setupSearchEvents() {
     var searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
@@ -62,6 +187,7 @@ function setupSearchEvents() {
     });
 }
 
+// ============ INDEXEDDB ============
 function initDB() {
     var request = indexedDB.open('M4FMCLUB_DB', 1);
     
@@ -134,6 +260,7 @@ function saveToCache(stations) {
     } catch(e) {}
 }
 
+// ============ API LOADING ============
 async function refreshFromAPI() {
     if (isApiLoading) return;
     isApiLoading = true;
@@ -293,6 +420,7 @@ async function loadMoreStationsWithOffset() {
     isApiLoading = false;
 }
 
+// ============ PAGINATION ============
 function updatePaginationAfterBackgroundLoad() {
     if (currentGenre === 'all' && !searchQuery && hasInitialLoaded) {
         currentList = allStations;
@@ -396,6 +524,7 @@ function goToPage(page) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ============ GENRES ============
 function renderGenres() {
     var scroll = document.getElementById('genresScroll');
     scroll.innerHTML = '';
@@ -453,6 +582,7 @@ function filterStations() {
     goToPage(1);
 }
 
+// ============ CREATE CARD ============
 function createCard(station) {
     var card = document.createElement('div');
     card.className = 'station-card';
@@ -488,6 +618,7 @@ function createCard(station) {
     return card;
 }
 
+// ============ FAVORITES ============
 function toggleFav(uuid) {
     var station = allStations.find(function(s) { return s.stationuuid === uuid; });
     
@@ -556,6 +687,7 @@ function showFavorites() {
     goToPage(1);
 }
 
+// ============ PLAYER ============
 function bindPlayerFavButton() {
     var favBtn = document.getElementById('favBtn');
     if (favBtn) {
@@ -567,34 +699,6 @@ function bindPlayerFavButton() {
             }
         });
     }
-}
-
-function doSearch(query) {
-    searchQuery = query.trim();
-    
-    if (!searchQuery) {
-        clearSearch();
-        return;
-    }
-    
-    clearTimeout(window.searchTimeout);
-    window.searchTimeout = setTimeout(filterStations, 300);
-}
-
-function clearSearch() {
-    searchQuery = '';
-    var searchInput = document.getElementById('searchInput');
-    if (searchInput) searchInput.value = '';
-    
-    currentGenre = 'all';
-    document.querySelectorAll('.chip').forEach(function(c) {
-        c.classList.remove('active');
-        if (c.getAttribute('data-genre') === 'all' || c.textContent.indexOf('All') !== -1) {
-            c.classList.add('active');
-        }
-    });
-    
-    filterStations();
 }
 
 function playStation(station) {
@@ -620,6 +724,8 @@ function playStation(station) {
         isPlaying = true;
         document.getElementById('miniPlayer').style.display = 'flex';
         updatePlayerUI();
+        updateMediaSession();
+        trackPlay(station);
         showToast('▶️ ' + station.name);
         
         document.querySelectorAll('.station-card').forEach(function(c) { c.classList.remove('playing'); });
@@ -629,6 +735,13 @@ function playStation(station) {
         clearTimeout(timeout);
         showToast('❌ Error playing');
     });
+}
+
+function trackPlay(station) {
+    var history = JSON.parse(localStorage.getItem('m4fmHistory') || '[]');
+    history.unshift({ name: station.name, time: Date.now() });
+    history = history.slice(0, 100);
+    localStorage.setItem('m4fmHistory', JSON.stringify(history));
 }
 
 function togglePlay() {
@@ -642,6 +755,7 @@ function togglePlay() {
         isPlaying = true;
     }
     updatePlayerUI();
+    updateMediaSession();
 }
 
 function updatePlayerUI() {
@@ -673,15 +787,18 @@ function closePlayer() { document.getElementById('playerModal').style.display = 
 function prevStation() {
     var idx = currentList.findIndex(function(s) { return s.stationuuid === currentStation?.stationuuid; });
     if (idx > 0) playStation(currentList[idx - 1]);
+    else showToast('📻 Already at first station');
 }
 
 function nextStation() {
     var idx = currentList.findIndex(function(s) { return s.stationuuid === currentStation?.stationuuid; });
     if (idx < currentList.length - 1) playStation(currentList[idx + 1]);
+    else showToast('📻 Already at last station');
 }
 
 function setVolume(v) { audio.volume = v / 100; }
 
+// ============ SHARE ============
 function shareStation() {
     if (!currentStation) return;
     
@@ -713,6 +830,34 @@ function shareStation() {
     }
 }
 
+// ============ SEARCH ============
+function doSearch(query) {
+    searchQuery = query.trim();
+    
+    if (!searchQuery) {
+        clearSearch();
+        return;
+    }
+    
+    clearTimeout(window.searchTimeout);
+    window.searchTimeout = setTimeout(filterStations, 300);
+}
+
+function clearSearch() {
+    searchQuery = '';
+    var searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    
+    currentGenre = 'all';
+    document.querySelectorAll('.chip').forEach(function(c) {
+        c.classList.remove('active');
+        if (c.textContent.indexOf('All') !== -1) c.classList.add('active');
+    });
+    
+    filterStations();
+}
+
+// ============ TOAST ============
 function showToast(msg) {
     var toast = document.getElementById('toast');
     toast.textContent = msg;
@@ -721,5 +866,7 @@ function showToast(msg) {
     toast._timeout = setTimeout(function() { toast.classList.remove('show'); }, 2000);
 }
 
+// ============ AUDIO EVENTS ============
 audio.addEventListener('playing', function() { isPlaying = true; updatePlayerUI(); });
 audio.addEventListener('pause', function() { isPlaying = false; updatePlayerUI(); });
+audio.addEventListener('error', function() { isPlaying = false; updatePlayerUI(); });
