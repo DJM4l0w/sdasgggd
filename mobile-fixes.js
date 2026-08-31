@@ -177,9 +177,7 @@
             el.addEventListener('scroll', () => {}, { passive: true });
         });
         
-        document.addEventListener('dblclick', (e) => {
-            e.preventDefault();
-        }, { passive: false });
+        // REMOVIDO: dblclick com preventDefault
     }
     
     // ============ MONITORAMENTO DE BATERIA ============
