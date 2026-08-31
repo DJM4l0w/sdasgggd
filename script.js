@@ -1216,21 +1216,40 @@ function toggleFavorite() {
 
 // ============ SHARE ============
 function shareStation() {
-    if (!currentStation) return;
-    var shareText = '🎵 Listening to ' + currentStation.name + (currentStation.country ? ' from ' + currentStation.country : '') + ' now on the best M4FMCLUB app! 📻';
+    if (!currentStation) {
+        showToast('❌ ' + t('noStationPlaying'));
+        return;
+    }
+    
+    var shareText = '🎵 ' + currentStation.name + 
+                    (currentStation.country ? ' from ' + currentStation.country : '') + 
+                    ' - M4FMCLUB 📻';
+    
+    // Tentar compartilhamento nativo
     if (navigator.share) {
-        navigator.share({ title: 'M4FMCLUB', text: shareText }).then(function() {
+        navigator.share({
+            title: 'M4FMCLUB',
+            text: shareText,
+            url: window.location.href
+        }).then(function() {
             showToast('✅ ' + t('shared'));
         }).catch(function(err) {
-            if (err.name !== 'AbortError') showToast('❌ ' + t('error'));
+            if (err.name !== 'AbortError') {
+                showToast('❌ ' + t('error'));
+            }
         });
-    } else {
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(shareText).then(function() { showToast('📋 ' + t('copied')); })
-            .catch(function() { showToast('❌ ' + t('error')); });
-        } else {
-            showToast('📋 ' + currentStation.name);
-        }
+    } 
+    // Fallback: copiar para clipboard
+    else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareText).then(function() {
+            showToast('📋 ' + t('copied'));
+        }).catch(function() {
+            showToast('❌ ' + t('error'));
+        });
+    } 
+    // Último recurso
+    else {
+        showToast('📋 ' + currentStation.name);
     }
 }
 
