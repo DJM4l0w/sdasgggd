@@ -2,7 +2,7 @@ var API = 'https://de1.api.radio-browser.info/json';
 var allStations = [];
 var currentList = [];
 var currentPage = 1;
-var PAGE_SIZE = 20;
+var PAGE_SIZE = 30;
 var totalPages = 0;
 var isLoading = false;
 var currentStation = null;
@@ -13,6 +13,7 @@ var favStations = JSON.parse(localStorage.getItem('m4fmfavStations') || '[]');
 var currentGenre = 'all';
 var searchQuery = '';
 var isApiLoading = false;
+var hasLoadedInitial = false;
 
 var genres = [
     {name:'All', tag:'all', emoji:'🌍'},
@@ -39,52 +40,57 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function init() {
     renderGenres();
-    loadStationsFromAPI();
+    loadInitialStations();
     updateFavCount();
 }
 
-// ============ CARREGAR RÁDIOS REAIS DA API ============
-async function loadStationsFromAPI() {
+// ============ CARREGAR 30 PRIMEIRAS RÁDIOS ============
+async function loadInitialStations() {
     var listElement = document.getElementById('stationList');
-    listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">Loading stations...</p></div>';
+    listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">Loading Dance & Electronic...</p></div>';
     
     try {
-        // Carregar Dance & Electronic primeiro
-        var danceRes = await fetch(API + '/stations/search?tag=dance&limit=50&hidebroken=true&order=clickcount&reverse=true');
+        // Buscar Dance (15)
+        var danceRes = await fetch(API + '/stations/search?tag=dance&limit=15&hidebroken=true&order=clickcount&reverse=true');
         var danceData = await danceRes.json();
         
-        var electronicRes = await fetch(API + '/stations/search?tag=electronic&limit=50&hidebroken=true&order=clickcount&reverse=true');
+        // Buscar Electronic (15)
+        var electronicRes = await fetch(API + '/stations/search?tag=electronic&limit=15&hidebroken=true&order=clickcount&reverse=true');
         var electronicData = await electronicRes.json();
         
-        // Combinar e remover duplicatas
+        // Combinar (30 total)
         var unique = {};
-        var combined = [];
+        var initial30 = [];
         
         [...danceData, ...electronicData].forEach(function(s) {
             if (s.url_resolved && !unique[s.stationuuid]) {
                 unique[s.stationuuid] = true;
-                combined.push(s);
+                initial30.push(s);
             }
         });
         
-        allStations = combined;
-        currentList = combined;
+        allStations = initial30.slice(0, 30);
+        currentList = allStations;
         
         document.getElementById('listTitle').textContent = '⚡ ' + allStations.length + ' Dance & Electronic';
         document.getElementById('stationList').innerHTML = '';
         
+        hasLoadedInitial = true;
         setupPagination();
         goToPage(1);
         
-        // Carregar mais em background
-        loadMoreStations();
+        // Carregar o resto em background
+        setTimeout(function() {
+            loadMoreInBackground();
+        }, 500);
         
     } catch(e) {
         listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ Error loading. Check connection.</p>';
     }
 }
 
-async function loadMoreStations() {
+// ============ CARREGAR MAIS EM BACKGROUND ============
+async function loadMoreInBackground() {
     if (isApiLoading) return;
     isApiLoading = true;
     
@@ -92,8 +98,8 @@ async function loadMoreStations() {
         var unique = {};
         allStations.forEach(function(s) { unique[s.stationuuid] = true; });
         
-        // Top 1000
-        var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
+        // Top 500
+        var topRes = await fetch(API + '/stations/topvote/500?hidebroken=true');
         var topData = await topRes.json();
         
         topData.forEach(function(s) {
@@ -103,14 +109,14 @@ async function loadMoreStations() {
             }
         });
         
-        updateTitle();
+        updateTitleSilently();
         
-        // Gêneros
-        var genreTags = ['house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin'];
+        // Gêneros (10 principais)
+        var genreTags = ['house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country'];
         
         for (var i = 0; i < genreTags.length; i++) {
             try {
-                var res = await fetch(API + '/stations/search?tag=' + genreTags[i] + '&limit=200&hidebroken=true&order=clickcount&reverse=true');
+                var res = await fetch(API + '/stations/search?tag=' + genreTags[i] + '&limit=100&hidebroken=true&order=clickcount&reverse=true');
                 var data = await res.json();
                 data.forEach(function(s) {
                     if (s.url_resolved && !unique[s.stationuuid]) {
@@ -118,7 +124,7 @@ async function loadMoreStations() {
                         allStations.push(s);
                     }
                 });
-                updateTitle();
+                updateTitleSilently();
             } catch(e) {}
         }
         
@@ -127,7 +133,7 @@ async function loadMoreStations() {
         
         for (var j = 0; j < countries.length; j++) {
             try {
-                var cRes = await fetch(API + '/stations/bycountrycodeexact/' + countries[j] + '?limit=200&hidebroken=true&order=clickcount&reverse=true');
+                var cRes = await fetch(API + '/stations/bycountrycodeexact/' + countries[j] + '?limit=100&hidebroken=true&order=clickcount&reverse=true');
                 var cData = await cRes.json();
                 cData.forEach(function(s) {
                     if (s.url_resolved && !unique[s.stationuuid]) {
@@ -135,8 +141,15 @@ async function loadMoreStations() {
                         allStations.push(s);
                     }
                 });
-                updateTitle();
+                updateTitleSilently();
             } catch(e) {}
+        }
+        
+        // Atualizar paginação se estiver na página inicial
+        if (currentGenre === 'all' && !searchQuery) {
+            currentList = allStations;
+            totalPages = Math.ceil(allStations.length / PAGE_SIZE);
+            setupPagination();
         }
         
     } catch(e) {
@@ -146,14 +159,14 @@ async function loadMoreStations() {
     isApiLoading = false;
 }
 
-function updateTitle() {
+function updateTitleSilently() {
     var titleElement = document.getElementById('listTitle');
-    if (titleElement) {
-        titleElement.textContent = '⚡ ' + allStations.length + ' Stations';
+    if (titleElement && hasLoadedInitial) {
+        titleElement.textContent = '🌍 ' + allStations.length + ' Stations Available';
     }
 }
 
-// ============ PAGINAÇÃO ============
+// ============ PAGINAÇÃO COM DESIGN MELHOR ============
 function setupPagination() {
     totalPages = Math.ceil(currentList.length / PAGE_SIZE);
     
@@ -176,14 +189,14 @@ function renderPagination() {
     
     if (totalPages <= 1) return;
     
-    // Previous
+    // Previous button
     var prevBtn = document.createElement('button');
-    prevBtn.className = 'page-btn' + (currentPage === 1 ? ' disabled' : '');
-    prevBtn.textContent = '←';
+    prevBtn.className = 'page-btn prev' + (currentPage === 1 ? ' disabled' : '');
+    prevBtn.innerHTML = '‹';
     prevBtn.onclick = function() { if (currentPage > 1) goToPage(currentPage - 1); };
     container.appendChild(prevBtn);
     
-    // Pages
+    // Page numbers
     var startPage = Math.max(1, currentPage - 2);
     var endPage = Math.min(totalPages, currentPage + 2);
     
@@ -192,7 +205,7 @@ function renderPagination() {
         if (startPage > 2) {
             var dots = document.createElement('span');
             dots.className = 'page-dots';
-            dots.textContent = '...';
+            dots.textContent = '···';
             container.appendChild(dots);
         }
     }
@@ -205,24 +218,18 @@ function renderPagination() {
         if (endPage < totalPages - 1) {
             var dots2 = document.createElement('span');
             dots2.className = 'page-dots';
-            dots2.textContent = '...';
+            dots2.textContent = '···';
             container.appendChild(dots2);
         }
         container.appendChild(createPageButton(totalPages));
     }
     
-    // Next
+    // Next button
     var nextBtn = document.createElement('button');
-    nextBtn.className = 'page-btn' + (currentPage === totalPages ? ' disabled' : '');
-    nextBtn.textContent = '→';
+    nextBtn.className = 'page-btn next' + (currentPage === totalPages ? ' disabled' : '');
+    nextBtn.innerHTML = '›';
     nextBtn.onclick = function() { if (currentPage < totalPages) goToPage(currentPage + 1); };
     container.appendChild(nextBtn);
-    
-    // Info
-    var info = document.createElement('span');
-    info.className = 'page-info';
-    info.textContent = 'Page ' + currentPage + ' of ' + totalPages;
-    container.appendChild(info);
 }
 
 function createPageButton(pageNum) {
