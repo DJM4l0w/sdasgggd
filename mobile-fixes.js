@@ -234,18 +234,6 @@
         });
     }
     
-    // ============ BLOQUEAR PULL TO REFRESH (SÓ CSS - NÃO TRAVA SCROLL) ============
-    function setupPullToRefreshPrevention() {
-        // Aplicar CSS diretamente - NÃO interfere no scroll
-        document.documentElement.style.overscrollBehaviorY = 'none';
-        document.documentElement.style.overscrollBehaviorX = 'none';
-        document.body.style.overscrollBehaviorY = 'none';
-        document.body.style.overscrollBehaviorX = 'none';
-        document.body.style.overscrollBehavior = 'none';
-        
-        console.log('🔒 Pull to refresh bloqueado (CSS)');
-    }
-    
     // ============ INICIALIZAÇÃO ============
     function init() {
         console.log('🚀 M4FMCLUB Mobile Fixes carregado');
@@ -258,7 +246,6 @@
         optimizePerformance();
         setupBatteryMonitoring();
         setupErrorHandling();
-        setupPullToRefreshPrevention();
         
         // Registrar Service Worker
         if ('serviceWorker' in navigator) {
