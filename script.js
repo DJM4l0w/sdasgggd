@@ -42,6 +42,21 @@ function init() {
     renderGenres();
     loadTop30First();
     updateFavCount();
+    bindPlayerFavButton();
+}
+
+// ============ CONECTAR BOTÃO DE FAVORITO DO PLAYER ============
+function bindPlayerFavButton() {
+    var favBtn = document.getElementById('favBtn');
+    if (favBtn) {
+        favBtn.addEventListener('click', function() {
+            if (currentStation) {
+                toggleFav(currentStation.stationuuid);
+            } else {
+                showToast('❌ No station playing');
+            }
+        });
+    }
 }
 
 async function loadTop30First() {
@@ -90,7 +105,7 @@ async function loadAllStationsInBackground() {
                 allStations.push(s);
             }
         });
-        updateTitleBackground();
+        updatePaginationAfterBackgroundLoad();
     } catch(e) {}
     
     var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
@@ -105,7 +120,7 @@ async function loadAllStationsInBackground() {
                     allStations.push(s);
                 }
             });
-            updateTitleBackground();
+            updatePaginationAfterBackgroundLoad();
         } catch(e) {}
     }
     
@@ -121,23 +136,25 @@ async function loadAllStationsInBackground() {
                     allStations.push(s);
                 }
             });
-            updateTitleBackground();
+            updatePaginationAfterBackgroundLoad();
         } catch(e) {}
-    }
-    
-    if (currentGenre === 'all' && !searchQuery) {
-        currentList = allStations;
-        totalPages = Math.ceil(allStations.length / PAGE_SIZE);
-        setupPagination();
     }
     
     isApiLoading = false;
 }
 
-function updateTitleBackground() {
-    var titleElement = document.getElementById('listTitle');
-    if (titleElement && hasInitialLoaded) {
-        titleElement.textContent = '🌍 ' + allStations.length + ' Stations';
+// ============ ATUALIZAR PAGINAÇÃO APÓS CARREGAR ============
+function updatePaginationAfterBackgroundLoad() {
+    if (currentGenre === 'all' && !searchQuery && hasInitialLoaded) {
+        currentList = allStations;
+        totalPages = Math.ceil(allStations.length / PAGE_SIZE);
+        
+        var titleElement = document.getElementById('listTitle');
+        if (titleElement) {
+            titleElement.textContent = '🌍 ' + allStations.length + ' Stations';
+        }
+        
+        setupPagination();
     }
 }
 
@@ -301,7 +318,6 @@ function createCard(station) {
         '</div>' +
         '<button class="card-fav" data-uuid="' + station.stationuuid + '">' + (isFav ? '❤️' : '🤍') + '</button>';
     
-    // Usar addEventListener em vez de onclick inline
     var favBtn = card.querySelector('.card-fav');
     favBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -315,10 +331,7 @@ function createCard(station) {
     return card;
 }
 
-// ============ FAVORITOS CORRIGIDO ============
 function toggleFav(uuid) {
-    console.log('toggleFav called with:', uuid);
-    
     var station = allStations.find(function(s) { return s.stationuuid === uuid; });
     
     if (!station) {
@@ -340,13 +353,11 @@ function toggleFav(uuid) {
         showToast('❤️ Added!');
     }
     
-    // Salvar
     localStorage.setItem('m4fmfavs', JSON.stringify(Array.from(favorites)));
     localStorage.setItem('m4fmfavStations', JSON.stringify(favStations));
     
     updateFavCount();
     
-    // Atualizar TODOS os botões
     document.querySelectorAll('.card-fav').forEach(function(btn) {
         if (btn.dataset.uuid === uuid) {
             btn.textContent = favorites.has(uuid) ? '❤️' : '🤍';
@@ -355,8 +366,10 @@ function toggleFav(uuid) {
     
     // Atualizar botão do player
     var playerFavBtn = document.getElementById('favBtn');
-    if (playerFavBtn && currentStation && currentStation.stationuuid === uuid) {
-        playerFavBtn.textContent = favorites.has(uuid) ? '❤️ Favorited' : '🤍 Favorite';
+    if (playerFavBtn) {
+        if (currentStation && currentStation.stationuuid === uuid) {
+            playerFavBtn.textContent = favorites.has(uuid) ? '❤️ Favorited' : '🤍 Favorite';
+        }
     }
 }
 
