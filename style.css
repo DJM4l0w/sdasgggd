@@ -81,3 +81,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',Ro
 
 @media(max-width:350px){.logo{font-size:1.1rem}.station-img{width:40px;height:40px}.station-info h3{font-size:13px}.player-artwork{width:120px;height:120px}}
 @media(min-width:500px){body{max-width:500px;margin:0 auto;box-shadow:0 0 40px rgba(0,0,0,.5)}}
+
+.splash-screen{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;transition:opacity .5s}
+.splash-logo{font-size:2rem;font-weight:800;color:var(--primary);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
