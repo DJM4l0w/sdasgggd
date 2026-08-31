@@ -4,8 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Stream over 8,000 radio stations worldwide - Electronic, House, Techno, EDM and more">
     <title>ElectroStream - Electronic Music Radio</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 </head>
 <body>
     <!-- Status Bar -->
@@ -21,12 +25,13 @@
                 <span class="logo-icon">⚡</span>
                 <span class="logo-text">Electro<span>Stream</span></span>
             </div>
-            <button class="icon-btn" id="menuBtn">☰</button>
+            <button class="icon-btn" id="menuBtn" aria-label="Open menu">☰</button>
         </div>
         
         <div class="search-bar">
             <span class="search-icon">🔍</span>
-            <input type="search" id="searchInput" placeholder="Search electronic stations..." />
+            <input type="search" id="searchInput" placeholder="Search electronic stations..." autocomplete="off">
+            <button class="clear-btn" id="clearBtn" style="display: none;">✕</button>
         </div>
     </header>
 
@@ -64,7 +69,7 @@
         <section class="section">
             <div class="section-header">
                 <h2>⚡ Top Electronic</h2>
-                <span class="see-all">See All</span>
+                <span class="see-all" data-section="featured">See All</span>
             </div>
             <div class="featured-grid" id="featuredElectronic"></div>
         </section>
@@ -73,7 +78,7 @@
         <section class="section">
             <div class="section-header">
                 <h2>🏆 Top 50 Stations</h2>
-                <span class="see-all">All Genres</span>
+                <span class="see-all" data-section="top50">All Genres</span>
             </div>
             <div class="top-50-list" id="top50List"></div>
         </section>
@@ -82,11 +87,24 @@
         <section class="section">
             <div class="section-header">
                 <h2>📈 Trending Electronic</h2>
-                <span class="see-all">See All</span>
+                <span class="see-all" data-section="trending">See All</span>
             </div>
             <div class="station-list" id="trendingList"></div>
         </section>
     </main>
+
+    <!-- Loading State -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Loading stations...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="emptyState" style="display: none;">
+        <div class="empty-icon">🔍</div>
+        <h3>No stations found</h3>
+        <p>Try a different search term or category</p>
+    </div>
 
     <!-- Mini Player -->
     <div class="mini-player" id="miniPlayer" style="display: none;">
@@ -98,7 +116,7 @@
                     <p id="miniStatus">Loading...</p>
                 </div>
             </div>
-            <button class="mini-play-btn" id="miniPlayBtn">▶️</button>
+            <button class="mini-play-btn" id="miniPlayBtn" aria-label="Play/Pause">▶️</button>
         </div>
     </div>
 
@@ -106,7 +124,7 @@
     <div class="full-player" id="fullPlayer" style="display: none;">
         <div class="player-overlay"></div>
         <div class="player-content">
-            <button class="close-player" id="closePlayer">✕</button>
+            <button class="close-player" id="closePlayer" aria-label="Close">✕</button>
             
             <div class="player-artwork">
                 <div class="artwork-ring">
@@ -120,10 +138,18 @@
                 <div class="player-tags" id="playerTags"></div>
             </div>
             
+            <div class="player-progress">
+                <span class="time">LIVE</span>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <span class="time">∞</span>
+            </div>
+            
             <div class="player-controls">
-                <button class="control-btn" id="prevBtn">⏮</button>
-                <button class="play-btn" id="playBtn">▶️</button>
-                <button class="control-btn" id="nextBtn">⏭</button>
+                <button class="control-btn" id="prevBtn" aria-label="Previous">⏮</button>
+                <button class="play-btn" id="playBtn" aria-label="Play">▶️</button>
+                <button class="control-btn" id="nextBtn" aria-label="Next">⏭</button>
             </div>
             
             <div class="volume-control">
@@ -135,13 +161,7 @@
         </div>
     </div>
 
-    <!-- Loading -->
-    <div class="loading" id="loading" style="display: none;">
-        <div class="spinner"></div>
-        <p>Loading stations...</p>
-    </div>
-
-    <!-- Toast -->
+    <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
     <script src="script.js"></script>
