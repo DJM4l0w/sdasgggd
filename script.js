@@ -9,19 +9,30 @@ class ElectroStreamApp {
         this.audio = new Audio();
         this.isPlaying = false;
         this.currentCategory = 'electronic';
+        this.favorites = new Set();
         
         this.init();
     }
 
     async init() {
         this.bindEvents();
+        this.loadFavorites();
         await this.loadStations();
     }
 
     bindEvents() {
         // Search
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            this.searchStations(e.target.value);
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value;
+            document.getElementById('clearBtn').style.display = query ? 'block' : 'none';
+            this.searchStations(query);
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            searchInput.value = '';
+            document.getElementById('clearBtn').style.display = 'none';
+            this.resetDisplay();
         });
 
         // Categories
@@ -34,25 +45,63 @@ class ElectroStreamApp {
             });
         });
 
-        // Player
-        document.getElementById('miniPlayer').addEventListener('click', () => this.openFullPlayer());
-        document.getElementById('miniPlayBtn').addEventListener('click', (e) => {
-            e.stopPropagation();
+        // Hero button
+        document.getElementById('exploreBtn').addEventListener('click', () => {
+            document.querySelector('[data-category="electronic"]').click();
+            document.getElementById('featuredElectronic').scrollIntoView({ behavior: 'smooth' });
+        });
+
+        // Player controls
+        document.getElementById('miniPlayer').addEventListener('click', (e) => {
+            if (e.target !== document.getElementById('miniPlayBtn')) {
+                this.openFullPlayer();
+            }
+        });
+
+        document.getElementById('miniPlayBtn').addEventListener('click', () => {
             this.togglePlay();
         });
-        document.getElementById('closePlayer').addEventListener('click', () => this.closeFullPlayer());
-        document.getElementById('playBtn').addEventListener('click', () => this.togglePlay());
-        document.getElementById('favoriteBtn').addEventListener('click', () => this.toggleFavorite());
+
+        document.getElementById('closePlayer').addEventListener('click', () => {
+            this.closeFullPlayer();
+        });
+
+        document.getElementById('playBtn').addEventListener('click', () => {
+            this.togglePlay();
+        });
+
+        document.getElementById('favoriteBtn').addEventListener('click', () => {
+            this.toggleFavorite();
+        });
+
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            this.playPrevious();
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            this.playNext();
+        });
 
         // Volume
         document.getElementById('volumeSlider').addEventListener('input', (e) => {
             this.audio.volume = e.target.value / 100;
         });
 
-        // Hero button
-        document.getElementById('exploreBtn').addEventListener('click', () => {
-            document.querySelector('[data-category="electronic"]').click();
-            document.getElementById('featuredElectronic').scrollIntoView({ behavior: 'smooth' });
+        // Audio events
+        this.audio.addEventListener('playing', () => {
+            this.isPlaying = true;
+            this.updatePlayerUI();
+        });
+
+        this.audio.addEventListener('pause', () => {
+            this.isPlaying = false;
+            this.updatePlayerUI();
+        });
+
+        this.audio.addEventListener('error', () => {
+            this.showToast('Error playing station');
+            this.isPlaying = false;
+            this.updatePlayerUI();
         });
     }
 
@@ -60,22 +109,26 @@ class ElectroStreamApp {
         this.showLoading();
         
         try {
-            // Fetch top stations (all genres)
+            // Fetch top 50 stations (all genres)
             const topResponse = await fetch('https://de1.api.radio-browser.info/json/stations/topvote/50');
             this.topStations = await topResponse.json();
-            
+
             // Fetch electronic stations
-            const electronicResponse = await fetch('https://de1.api.radio-browser.info/json/stations/search?tag=electronic&limit=20&order=clickcount&reverse=true');
+            const electronicResponse = await fetch(
+                'https://de1.api.radio-browser.info/json/stations/search?tag=electronic&limit=20&order=clickcount&reverse=true'
+            );
             this.electronicStations = await electronicResponse.json();
-            
+
             // Fetch more electronic genres
             const genres = ['house', 'techno', 'trance', 'edm'];
             for (const genre of genres) {
-                const response = await fetch(`https://de1.api.radio-browser.info/json/stations/search?tag=${genre}&limit=10&order=clickcount&reverse=true`);
+                const response = await fetch(
+                    `https://de1.api.radio-browser.info/json/stations/search?tag=${genre}&limit=10&order=clickcount&reverse=true`
+                );
                 const stations = await response.json();
                 this.electronicStations = [...this.electronicStations, ...stations];
             }
-            
+
             this.stations = [...this.electronicStations, ...this.topStations];
             
             this.displayFeaturedElectronic();
@@ -99,11 +152,13 @@ class ElectroStreamApp {
         featured.forEach(station => {
             const card = document.createElement('div');
             card.className = 'featured-card';
+            
             card.innerHTML = `
                 <div class="featured-avatar">⚡</div>
                 <h3>${station.name}</h3>
                 <p>${station.tags ? station.tags.split(',')[0] : 'Electronic'}</p>
             `;
+            
             card.addEventListener('click', () => this.playStation(station));
             container.appendChild(card);
         });
@@ -171,33 +226,38 @@ class ElectroStreamApp {
 
     searchStations(query) {
         if (!query) {
-            this.displayFeaturedElectronic();
-            this.displayTop50();
-            this.displayTrending();
+            this.resetDisplay();
             return;
         }
         
         const searchResults = this.stations.filter(station => 
             station.name.toLowerCase().includes(query.toLowerCase()) ||
-            (station.tags && station.tags.toLowerCase().includes(query.toLowerCase()))
+            (station.tags && station.tags.toLowerCase().includes(query.toLowerCase())) ||
+            (station.country && station.country.toLowerCase().includes(query.toLowerCase()))
         );
+        
+        this.hideSections();
         
         const container = document.getElementById('trendingList');
         container.innerHTML = '';
         
-        document.getElementById('featuredElectronic').innerHTML = '';
-        document.getElementById('top50List').innerHTML = '';
+        if (searchResults.length === 0) {
+            document.getElementById('emptyState').style.display = 'block';
+            return;
+        }
         
-        searchResults.slice(0, 20).forEach(station => {
+        document.getElementById('emptyState').style.display = 'none';
+        
+        searchResults.slice(0, 30).forEach(station => {
             container.appendChild(this.createStationCard(station));
         });
+        
+        container.parentElement.style.display = 'block';
     }
 
     filterByCategory() {
         if (this.currentCategory === 'all') {
-            this.displayFeaturedElectronic();
-            this.displayTop50();
-            this.displayTrending();
+            this.resetDisplay();
             return;
         }
         
@@ -205,15 +265,45 @@ class ElectroStreamApp {
             station.tags && station.tags.toLowerCase().includes(this.currentCategory)
         );
         
-        document.getElementById('featuredElectronic').innerHTML = '';
-        document.getElementById('top50List').innerHTML = '';
+        this.hideSections();
         
         const container = document.getElementById('trendingList');
         container.innerHTML = '';
         
-        filtered.slice(0, 20).forEach(station => {
+        if (filtered.length === 0) {
+            document.getElementById('emptyState').style.display = 'block';
+            return;
+        }
+        
+        document.getElementById('emptyState').style.display = 'none';
+        
+        filtered.slice(0, 30).forEach(station => {
             container.appendChild(this.createStationCard(station));
         });
+        
+        container.parentElement.style.display = 'block';
+    }
+
+    hideSections() {
+        document.getElementById('featuredElectronic').innerHTML = '';
+        document.getElementById('top50List').innerHTML = '';
+        document.getElementById('trendingList').innerHTML = '';
+        
+        document.getElementById('featuredElectronic').parentElement.style.display = 'none';
+        document.getElementById('top50List').parentElement.style.display = 'none';
+        document.getElementById('trendingList').parentElement.style.display = 'none';
+    }
+
+    resetDisplay() {
+        document.getElementById('featuredElectronic').parentElement.style.display = 'block';
+        document.getElementById('top50List').parentElement.style.display = 'block';
+        document.getElementById('trendingList').parentElement.style.display = 'block';
+        
+        document.getElementById('emptyState').style.display = 'none';
+        
+        this.displayFeaturedElectronic();
+        this.displayTop50();
+        this.displayTrending();
     }
 
     async playStation(station) {
@@ -225,15 +315,13 @@ class ElectroStreamApp {
             
             await this.audio.play();
             
-            this.isPlaying = true;
-            this.updatePlayer();
-            
             document.getElementById('miniPlayer').style.display = 'block';
+            this.updatePlayerUI();
             
             this.showToast(`Now playing: ${station.name}`);
             
         } catch (error) {
-            console.error('Error playing:', error);
+            console.error('Error playing station:', error);
             this.showToast('Failed to play station');
         }
     }
@@ -243,28 +331,69 @@ class ElectroStreamApp {
         
         if (this.isPlaying) {
             this.audio.pause();
-            this.isPlaying = false;
         } else {
             this.audio.play();
-            this.isPlaying = true;
         }
-        
-        this.updatePlayer();
     }
 
-    updatePlayer() {
+    playPrevious() {
+        const currentIndex = this.stations.findIndex(s => 
+            s.stationuuid === this.currentStation?.stationuuid
+        );
+        
+        if (currentIndex > 0) {
+            this.playStation(this.stations[currentIndex - 1]);
+        }
+    }
+
+    playNext() {
+        const currentIndex = this.stations.findIndex(s => 
+            s.stationuuid === this.currentStation?.stationuuid
+        );
+        
+        if (currentIndex < this.stations.length - 1) {
+            this.playStation(this.stations[currentIndex + 1]);
+        }
+    }
+
+    updatePlayerUI() {
         const playBtn = document.getElementById('playBtn');
         const miniPlayBtn = document.getElementById('miniPlayBtn');
         
-        playBtn.textContent = this.isPlaying ? '⏸️' : '▶️';
-        miniPlayBtn.textContent = this.isPlaying ? '⏸️' : '▶️';
+        const playIcon = this.isPlaying ? '⏸️' : '▶️';
+        playBtn.textContent = playIcon;
+        miniPlayBtn.textContent = playIcon;
         
         if (this.currentStation) {
             document.getElementById('miniName').textContent = this.currentStation.name;
-            document.getElementById('miniStatus').textContent = 'Now Playing - Live';
+            document.getElementById('miniStatus').textContent = this.isPlaying ? 'Now Playing - Live' : 'Paused';
             document.getElementById('playerName').textContent = this.currentStation.name;
             document.getElementById('playerGenre').textContent = 
                 this.currentStation.tags ? this.currentStation.tags.split(',')[0] : 'Electronic Music';
+            
+            // Update tags
+            const tagsContainer = document.getElementById('playerTags');
+            tagsContainer.innerHTML = '';
+            
+            if (this.currentStation.tags) {
+                const tags = this.currentStation.tags.split(',').slice(0, 4);
+                tags.forEach(tag => {
+                    const tagElement = document.createElement('span');
+                    tagElement.className = 'tag';
+                    tagElement.textContent = tag.trim();
+                    tagsContainer.appendChild(tagElement);
+                });
+            }
+            
+            // Update favorite button
+            const favBtn = document.getElementById('favoriteBtn');
+            if (this.favorites.has(this.currentStation.stationuuid)) {
+                favBtn.classList.add('active');
+                favBtn.textContent = '❤️ Remove from Favorites';
+            } else {
+                favBtn.classList.remove('active');
+                favBtn.textContent = '🤍 Add to Favorites';
+            }
         }
     }
 
@@ -279,14 +408,35 @@ class ElectroStreamApp {
     }
 
     toggleFavorite() {
-        const btn = document.getElementById('favoriteBtn');
-        btn.classList.toggle('active');
-        btn.textContent = btn.classList.contains('active') ? '❤️ Added to Favorites' : '🤍 Add to Favorites';
-        this.showToast(btn.classList.contains('active') ? 'Added to favorites!' : 'Removed from favorites');
+        if (!this.currentStation) return;
+        
+        const stationId = this.currentStation.stationuuid;
+        
+        if (this.favorites.has(stationId)) {
+            this.favorites.delete(stationId);
+            this.showToast('Removed from favorites');
+        } else {
+            this.favorites.add(stationId);
+            this.showToast('Added to favorites');
+        }
+        
+        this.saveFavorites();
+        this.updatePlayerUI();
+    }
+
+    saveFavorites() {
+        localStorage.setItem('favorites', JSON.stringify([...this.favorites]));
+    }
+
+    loadFavorites() {
+        const saved = localStorage.getItem('favorites');
+        if (saved) {
+            this.favorites = new Set(JSON.parse(saved));
+        }
     }
 
     showLoading() {
-        document.getElementById('loading').style.display = 'block';
+        document.getElementById('loading').style.display = 'flex';
     }
 
     hideLoading() {
@@ -304,7 +454,7 @@ class ElectroStreamApp {
     }
 }
 
-// Initialize app
+// ============ INITIALIZE APP ============
 document.addEventListener('DOMContentLoaded', () => {
     new ElectroStreamApp();
 });
