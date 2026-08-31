@@ -1,168 +1,195 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0a0a0f">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="description" content="Stream over 8,000 radio stations worldwide - Electronic, House, Techno, EDM and more">
-    <title>ElectroStream - Electronic Music Radio</title>
+    <meta name="description" content="RadioHub - Milhares de rádios online grátis. Todos os gêneros musicais.">
+    <title>RadioHub - Rádios Online</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
-    <!-- Status Bar -->
-    <div class="status-bar">
-        <span>9:41</span>
-        <span>📶 🔋 100%</span>
-    </div>
-
     <!-- Header -->
     <header class="header">
         <div class="header-top">
             <div class="logo">
-                <span class="logo-icon">⚡</span>
-                <span class="logo-text">Electro<span>Stream</span></span>
+                <span class="logo-icon">📻</span>
+                <span>Radio<span>Hub</span></span>
             </div>
-            <button class="icon-btn" id="menuBtn" aria-label="Open menu">☰</button>
+            <div class="header-actions">
+                <button class="icon-btn" id="favoritesBtn" onclick="showFavorites()">
+                    ❤️
+                    <span class="badge" id="favCount" style="display: none;">0</span>
+                </button>
+                <button class="icon-btn" id="contactBtn" onclick="showContact()">✉️</button>
+            </div>
         </div>
-        
         <div class="search-bar">
-            <span class="search-icon">🔍</span>
-            <input type="search" id="searchInput" placeholder="Search electronic stations..." autocomplete="off">
-            <button class="clear-btn" id="clearBtn" style="display: none;">✕</button>
+            <span>🔍</span>
+            <input type="search" id="searchInput" placeholder="Buscar rádios..." oninput="searchStations(this.value)">
         </div>
     </header>
 
-    <!-- Hero Section - Electronic Music -->
-    <section class="hero-electronica">
-        <div class="hero-bg"></div>
-        <div class="hero-content">
-            <div class="hero-badge">🔥 LIVE NOW</div>
-            <h1>Electronic Music</h1>
-            <p>Discover the best electronic, house, techno, and EDM stations</p>
-            <button class="hero-btn" id="exploreBtn">Explore Stations</button>
-        </div>
-        <div class="equalizer">
-            <div class="eq-bar"></div>
-            <div class="eq-bar"></div>
-            <div class="eq-bar"></div>
-            <div class="eq-bar"></div>
-            <div class="eq-bar"></div>
-        </div>
-    </section>
-
-    <!-- Quick Categories -->
-    <nav class="categories" id="categoriesNav">
-        <button class="category-btn active" data-category="electronic">⚡ Electronic</button>
-        <button class="category-btn" data-category="house">🏠 House</button>
-        <button class="category-btn" data-category="techno">🔊 Techno</button>
-        <button class="category-btn" data-category="trance">🌀 Trance</button>
-        <button class="category-btn" data-category="edm">🎆 EDM</button>
-        <button class="category-btn" data-category="all">🌐 All Genres</button>
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+        <button class="nav-tab active" onclick="switchTab('home', this)">
+            <span>🏠</span>
+            Início
+        </button>
+        <button class="nav-tab" onclick="switchTab('genres', this)">
+            <span>🎵</span>
+            Gêneros
+        </button>
+        <button class="nav-tab" onclick="switchTab('favorites', this)">
+            <span>❤️</span>
+            Favoritos
+        </button>
+        <button class="nav-tab" onclick="switchTab('contact', this)">
+            <span>✉️</span>
+            Contato
+        </button>
     </nav>
 
     <!-- Main Content -->
-    <main class="main-content">
-        <!-- Featured Electronic Stations -->
-        <section class="section">
-            <div class="section-header">
-                <h2>⚡ Top Electronic</h2>
-                <span class="see-all" data-section="featured">See All</span>
-            </div>
-            <div class="featured-grid" id="featuredElectronic"></div>
-        </section>
+    <main id="mainContent">
+        <!-- Home Section -->
+        <div id="homeSection">
+            <!-- Featured Stations -->
+            <section class="section">
+                <h2 class="section-title">⭐ Destaques</h2>
+                <div class="horizontal-scroll" id="featuredStations"></div>
+            </section>
 
-        <!-- Top 50 All Genres -->
-        <section class="section">
-            <div class="section-header">
-                <h2>🏆 Top 50 Stations</h2>
-                <span class="see-all" data-section="top50">All Genres</span>
-            </div>
-            <div class="top-50-list" id="top50List"></div>
-        </section>
+            <!-- Categories -->
+            <section class="section">
+                <h2 class="section-title">🎵 Gêneros Populares</h2>
+                <div class="categories-grid" id="categoriesGrid"></div>
+            </section>
 
-        <!-- Trending Electronic -->
-        <section class="section">
-            <div class="section-header">
-                <h2>📈 Trending Electronic</h2>
-                <span class="see-all" data-section="trending">See All</span>
-            </div>
-            <div class="station-list" id="trendingList"></div>
-        </section>
+            <!-- All Stations -->
+            <section class="section">
+                <h2 class="section-title">📻 Todas as Rádios</h2>
+                <div class="station-list" id="allStations"></div>
+            </section>
+        </div>
+
+        <!-- Genres Section -->
+        <div id="genresSection" style="display: none;">
+            <section class="section">
+                <h2 class="section-title">🎵 Todos os Gêneros</h2>
+                <div class="categories-grid" id="allGenresGrid"></div>
+            </section>
+        </div>
+
+        <!-- Favorites Section -->
+        <div id="favoritesSection" style="display: none;">
+            <section class="section">
+                <h2 class="section-title">❤️ Minhas Rádios Favoritas</h2>
+                <div class="station-list" id="favoritesList"></div>
+                <div id="emptyFavorites" class="empty-state" style="display: none;">
+                    <p>😢 Nenhuma rádio favorita ainda</p>
+                    <button class="btn" onclick="switchTab('home', document.querySelectorAll('.nav-tab')[0])">Explorar Rádios</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Contact Section -->
+        <div id="contactSection" style="display: none;">
+            <section class="section">
+                <h2 class="section-title">✉️ Fale Conosco</h2>
+                <form class="contact-form" onsubmit="sendContact(event)">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <input type="text" id="contactName" required placeholder="Seu nome">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="contactEmail" required placeholder="seu@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Assunto</label>
+                        <select id="contactSubject">
+                            <option value="sugestao">Sugestão</option>
+                            <option value="reclamacao">Reclamação</option>
+                            <option value="elogio">Elogio</option>
+                            <option value="radio">Sugerir Rádio</option>
+                            <option value="outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Mensagem</label>
+                        <textarea id="contactMessage" required placeholder="Sua mensagem..." rows="5"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Enviar Mensagem</button>
+                </form>
+            </section>
+        </div>
     </main>
-
-    <!-- Loading State -->
-    <div class="loading" id="loading">
-        <div class="spinner"></div>
-        <p>Loading stations...</p>
-    </div>
-
-    <!-- Empty State -->
-    <div class="empty-state" id="emptyState" style="display: none;">
-        <div class="empty-icon">🔍</div>
-        <h3>No stations found</h3>
-        <p>Try a different search term or category</p>
-    </div>
 
     <!-- Mini Player -->
     <div class="mini-player" id="miniPlayer" style="display: none;">
-        <div class="mini-player-content">
-            <div class="mini-player-info">
-                <div class="mini-avatar" id="miniAvatar">⚡</div>
-                <div class="mini-info">
-                    <h4 id="miniName">Station Name</h4>
-                    <p id="miniStatus">Loading...</p>
-                </div>
+        <div class="player-progress-bar">
+            <div class="player-progress-fill" id="playerProgress"></div>
+        </div>
+        <div class="mini-player-content" onclick="openFullPlayer()">
+            <div class="mini-station-img" id="miniStationImg">📻</div>
+            <div class="mini-info">
+                <h4 id="miniStationName">Rádio</h4>
+                <p id="miniStationStatus">Tocando...</p>
             </div>
-            <button class="mini-play-btn" id="miniPlayBtn" aria-label="Play/Pause">▶️</button>
+            <button class="mini-play-btn" id="miniPlayBtn" onclick="event.stopPropagation(); togglePlay()">⏸️</button>
+            <button class="mini-fav-btn" id="miniFavBtn" onclick="event.stopPropagation(); toggleFavorite()">🤍</button>
         </div>
     </div>
 
     <!-- Full Player -->
     <div class="full-player" id="fullPlayer" style="display: none;">
-        <div class="player-overlay"></div>
-        <div class="player-content">
-            <button class="close-player" id="closePlayer" aria-label="Close">✕</button>
+        <div class="player-overlay" onclick="closeFullPlayer()"></div>
+        <div class="player-sheet">
+            <div class="player-handle"></div>
+            <button class="close-btn" onclick="closeFullPlayer()">✕</button>
             
             <div class="player-artwork">
                 <div class="artwork-ring">
-                    <div class="artwork-center" id="playerArtwork">⚡</div>
+                    <div class="artwork-center" id="fullStationImg">📻</div>
                 </div>
             </div>
             
-            <div class="player-info">
-                <h2 id="playerName">Station Name</h2>
-                <p id="playerGenre">Electronic Music</p>
-                <div class="player-tags" id="playerTags"></div>
-            </div>
-            
-            <div class="player-progress">
-                <span class="time">LIVE</span>
-                <div class="progress-track">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <span class="time">∞</span>
+            <div class="player-details">
+                <h2 id="fullStationName">Nome da Rádio</h2>
+                <p id="fullStationGenre">Gênero</p>
+                <p id="fullStationCountry">País</p>
             </div>
             
             <div class="player-controls">
-                <button class="control-btn" id="prevBtn" aria-label="Previous">⏮</button>
-                <button class="play-btn" id="playBtn" aria-label="Play">▶️</button>
-                <button class="control-btn" id="nextBtn" aria-label="Next">⏭</button>
+                <button class="control-btn" onclick="previousStation()">⏮</button>
+                <button class="play-btn" id="fullPlayBtn" onclick="togglePlay()">⏸️</button>
+                <button class="control-btn" onclick="nextStation()">⏭</button>
             </div>
             
             <div class="volume-control">
                 <span>🔊</span>
-                <input type="range" id="volumeSlider" min="0" max="100" value="80">
+                <input type="range" id="volumeSlider" min="0" max="100" value="80" onchange="changeVolume(this.value)">
             </div>
             
-            <button class="favorite-btn" id="favoriteBtn">🤍 Add to Favorites</button>
+            <div class="player-actions">
+                <button class="action-btn" id="fullFavBtn" onclick="toggleFavorite()">🤍 Favoritar</button>
+                <button class="action-btn" onclick="shareStation()">📤 Compartilhar</button>
+            </div>
         </div>
     </div>
 
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Carregando rádios...</p>
+    </div>
 
     <script src="script.js"></script>
 </body>
