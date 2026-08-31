@@ -811,38 +811,20 @@ function filterStations() {
     goToPage(1);
 }
 
-// ============ MOST PLAYED CORRIGIDO ============
+
+// ============ MOST PLAYED (APENAS TOP 100 MUNDIAL) ============
 function showMostPlayed() {
     if (mostPlayedInterval) clearInterval(mostPlayedInterval);
     var listElement = document.getElementById('stationList');
     listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">' + t('loading') + '</p></div>';
     
-    getUserCountry().then(function(userCountry) {
-        console.log('🌍 País detectado:', userCountry);
-        
-        var countryUrl = userCountry ? 
-            API + '/stations/bycountrycodeexact/' + userCountry + '?limit=100&hidebroken=true&order=clickcount&reverse=true' : '';
-        
-        var countryPromise = countryUrl ? 
-            fetch(countryUrl)
-                .then(function(r) { return r.json(); })
-                .catch(function(err) { console.log('Erro país:', err); return []; }) : 
-            Promise.resolve([]);
-        
-        var worldPromise = fetch(API + '/stations/topclick/100?hidebroken=true')
-            .then(function(r) { return r.json(); })
-            .catch(function(err) { console.log('Erro mundial:', err); return []; });
-        
-        Promise.all([countryPromise, worldPromise]).then(function(results) {
-            var countryTop = results[0] || [];
-            var worldTop = results[1] || [];
+    // Buscar APENAS Top 100 Mundial
+    fetch(API + '/stations/topclick/100?hidebroken=true')
+        .then(function(r) { return r.json(); })
+        .then(function(worldTop) {
+            console.log('📊 Top 100 Mundial:', worldTop.length);
             
-            console.log('📊 Top país:', countryTop.length, '| Top mundial:', worldTop.length);
-            
-            var countryIds = {};
-            countryTop.forEach(function(s) { countryIds[s.stationuuid] = true; });
-            var worldFiltered = worldTop.filter(function(s) { return !countryIds[s.stationuuid]; });
-            var combined = countryTop.concat(worldFiltered);
+            var combined = worldTop || [];
             
             if (combined.length === 0) {
                 combined = allStations.filter(function(s) { return s && s.url_resolved; }).slice(0, 100);
@@ -863,9 +845,13 @@ function showMostPlayed() {
             setupPagination();
             goToPage(1);
             
+            // Atualizar ordenação a cada 3 segundos
             mostPlayedInterval = setInterval(function() {
                 var title = document.getElementById('listTitle').textContent;
-                if (title.indexOf('Most Played') === -1) { clearInterval(mostPlayedInterval); return; }
+                if (title.indexOf('Most Played') === -1) { 
+                    clearInterval(mostPlayedInterval); 
+                    return; 
+                }
                 currentList.sort(function(a, b) {
                     var simA = getSimulationData(a);
                     var simB = getSimulationData(b);
@@ -878,10 +864,12 @@ function showMostPlayed() {
                 pageStations.forEach(function(station) { fragment.appendChild(createCard(station)); });
                 document.getElementById('stationList').appendChild(fragment);
             }, 3000);
+        })
+        .catch(function(err) {
+            console.log('Erro:', err);
+            listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ ' + t('error') + '</p>';
         });
-    });
 }
-
 // ============ CREATE CARD ============
 function createCard(station) {
     var card = document.createElement('div');
