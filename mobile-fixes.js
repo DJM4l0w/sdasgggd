@@ -255,6 +255,29 @@
         });
     }
     
+    // ============ BLOQUEAR PULL TO REFRESH NO MOBILE ============
+    function setupPullToRefreshPrevention() {
+        if (!isMobile) return;
+        
+        let startY = 0;
+        
+        document.addEventListener('touchstart', function(e) {
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        document.addEventListener('touchmove', function(e) {
+            const touchY = e.touches[0].clientY;
+            const deltaY = touchY - startY;
+            
+            // Só bloqueia se estiver NO TOPO e puxando PARA BAIXO
+            if (window.scrollY <= 0 && deltaY > 0) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        console.log('🔒 Pull to refresh bloqueado');
+    }
+    
     // ============ INICIALIZAÇÃO ============
     function init() {
         console.log('🚀 M4FMCLUB Mobile Fixes carregado');
@@ -268,6 +291,7 @@
         optimizePerformance();
         setupBatteryMonitoring();
         setupErrorHandling();
+        setupPullToRefreshPrevention(); // ← ADICIONADO AQUI
         
         // Registrar Service Worker
         if ('serviceWorker' in navigator) {
@@ -289,21 +313,5 @@
     } else {
         init();
     }
-    // ============ BLOQUEAR PULL TO REFRESH NO MOBILE ============
-let startY = 0;
-
-document.addEventListener('touchstart', function(e) {
-    startY = e.touches[0].clientY;
-}, { passive: true });
-
-document.addEventListener('touchmove', function(e) {
-    const touchY = e.touches[0].clientY;
-    const deltaY = touchY - startY;
-    
-    // Se está no topo e puxando para baixo
-    if (window.scrollY <= 0 && deltaY > 0) {
-        e.preventDefault();
-    }
-}, { passive: false });
     
 })();
