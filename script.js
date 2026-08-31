@@ -21,6 +21,7 @@ var myIP = localStorage.getItem('m4fmUserIP') || '';
 var globalSimulation = JSON.parse(localStorage.getItem('m4fmGlobalSim') || '{}');
 var simulationInterval = null;
 var currentLanguage = 'en';
+var mostPlayedInterval = null;
 
 // ============ TRADUÇÕES ============
 var translationsData = {
@@ -245,14 +246,14 @@ function showToast(msg) {
     toast._timeout = setTimeout(function() { toast.classList.remove('show'); }, 2000);
 }
 
-// ============ SIMULAÇÃO ============
+// ============ SIMULAÇÃO PROFISSIONAL ============
 function startGlobalSimulation() {
-    simulationInterval = setInterval(updateSimulation, 4000);
+    simulationInterval = setInterval(updateSimulation, 3000);
     document.addEventListener('visibilitychange', function() {
         if (document.hidden) {
             clearInterval(simulationInterval);
         } else {
-            simulationInterval = setInterval(updateSimulation, 4000);
+            simulationInterval = setInterval(updateSimulation, 3000);
         }
     });
 }
@@ -263,8 +264,8 @@ function getSimulationData(station) {
         var base = calculateBaseListeners(station);
         globalSimulation[key] = {
             name: station.name, country: station.country || '',
-            baseListeners: base, peakListeners: Math.floor(base * (1.5 + Math.random())),
-            currentListeners: Math.floor(base + Math.random() * base * 0.5),
+            baseListeners: base, peakListeners: Math.floor(base * 2.5),
+            currentListeners: Math.floor(base * 0.8),
             lastUpdate: Date.now()
         };
         saveSimulation();
@@ -277,39 +278,60 @@ function saveSimulation() {
 }
 
 function calculateBaseListeners(station) {
-    var base = countryFactors[station.countrycode] || Math.floor(Math.random() * 500) + 100;
+    var base = 50;
+    if (station.clickcount) base = Math.floor(station.clickcount / 1000);
+    if (station.countrycode && countryFactors[station.countrycode]) base += countryFactors[station.countrycode];
     if (station.votes) base += Math.min(station.votes, 3000);
-    if (station.bitrate > 128) base *= 1.2;
-    if (station.bitrate < 64) base *= 0.7;
     if (station.tags) {
         var tags = station.tags.toLowerCase().split(',');
         for (var i = 0; i < tags.length; i++) {
             if (genreFactors[tags[i].trim()]) base *= genreFactors[tags[i].trim()];
         }
     }
+    if (station.bitrate > 128) base *= 1.2;
+    if (station.bitrate < 64) base *= 0.7;
+    if (station.clicktrend && station.clicktrend > 0) base *= 1.1;
+    if (station.clicktrend && station.clicktrend < 0) base *= 0.9;
     return Math.max(20, Math.floor(base));
 }
 
+function getHourFactor(hour) {
+    if (hour >= 6 && hour <= 9) return 1.3;
+    if (hour >= 10 && hour <= 12) return 1.1;
+    if (hour >= 12 && hour <= 14) return 1.4;
+    if (hour >= 15 && hour <= 17) return 1.2;
+    if (hour >= 17 && hour <= 19) return 1.6;
+    if (hour >= 20 && hour <= 23) return 1.8;
+    if (hour >= 0 && hour <= 3) return 0.4;
+    if (hour >= 4 && hour <= 5) return 0.5;
+    return 1.0;
+}
+
+function getDayFactor(day) {
+    if (day === 0) return 1.2;
+    if (day === 6) return 1.4;
+    if (day === 5) return 1.3;
+    return 1.0;
+}
+
 function updateSimulation() {
-    var hourFactor = getHourFactor(new Date().getHours());
+    var now = new Date();
+    var hourFactor = getHourFactor(now.getHours());
+    var dayFactor = getDayFactor(now.getDay());
     var keys = Object.keys(globalSimulation);
     for (var i = 0; i < keys.length; i++) {
         var station = globalSimulation[keys[i]];
-        var target = station.baseListeners * hourFactor + (Math.random() * 200 - 100);
+        var baseTarget = station.baseListeners * hourFactor * dayFactor;
+        var wave = Math.sin(Date.now() / 10000 + i) * station.baseListeners * 0.05;
+        var random = Math.random() * station.baseListeners * 0.02;
+        var target = baseTarget + wave + random;
         target = Math.max(20, Math.min(station.peakListeners, target));
-        station.currentListeners = Math.floor(station.currentListeners + (target - station.currentListeners) * 0.2);
+        station.currentListeners = Math.floor(station.currentListeners + (target - station.currentListeners) * 0.03);
+        station.lastUpdate = Date.now();
     }
     saveSimulation();
     updateCardsWithSimulation();
     updatePlayerWithSimulation();
-}
-
-function getHourFactor(hour) {
-    if (hour >= 20 && hour <= 23) return 1.5;
-    if (hour >= 0 && hour <= 5) return 0.5;
-    if (hour >= 6 && hour <= 9) return 1.2;
-    if (hour >= 15 && hour <= 19) return 1.3;
-    return 1.0;
 }
 
 function updateCardsWithSimulation() {
@@ -322,10 +344,10 @@ function updateCardsWithSimulation() {
         if (!countSpan) {
             countSpan = document.createElement('span');
             countSpan.className = 'live-count';
-            countSpan.style.cssText = 'color:#00f5d4;font-size:10px;font-weight:600;display:block;margin-top:2px;';
+            countSpan.style.cssText = 'color:#00f5d4;font-size:11px;font-weight:700;display:block;margin-top:2px;';
             card.querySelector('.station-info').appendChild(countSpan);
         }
-        countSpan.textContent = '🌍 ' + formatNumber(simData.currentListeners) + ' ' + t('listening');
+        countSpan.textContent = '🌍 ' + simData.currentListeners.toLocaleString() + ' ' + t('listening');
     }
 }
 
@@ -335,14 +357,30 @@ function updatePlayerWithSimulation() {
     if (!simData) return;
     var playerCount = document.getElementById('playerLiveCount');
     var miniCount = document.getElementById('miniLiveCount');
-    if (playerCount) playerCount.textContent = '🌍 ' + formatNumber(simData.currentListeners) + ' ' + t('listening');
-    if (miniCount) miniCount.textContent = '🌍 ' + formatNumber(simData.currentListeners) + ' ' + t('listening');
+    if (playerCount) playerCount.textContent = '🌍 ' + simData.currentListeners.toLocaleString() + ' ' + t('listening');
+    if (miniCount) miniCount.textContent = '🌍 ' + simData.currentListeners.toLocaleString() + ' ' + t('listening');
 }
 
 function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return Math.floor(num).toString();
+}
+
+// ============ DETECTAR PAÍS ============
+function getUserCountry() {
+    return new Promise(function(resolve) {
+        var cached = localStorage.getItem('m4fmUserCountry');
+        if (cached) { resolve(cached); return; }
+        fetch('https://ipapi.co/json/')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                var country = data.country_code || '';
+                if (country) localStorage.setItem('m4fmUserCountry', country);
+                resolve(country);
+            })
+            .catch(function() { resolve(''); });
+    });
 }
 
 // ============ GET USER IP ============
@@ -557,7 +595,6 @@ async function loadAllStationsInBackground() {
         });
         updatePaginationAfterBackgroundLoad();
     } catch(e) {}
-    
     var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
     for (var i = 0; i < allGenres.length; i++) {
         try {
@@ -572,7 +609,6 @@ async function loadAllStationsInBackground() {
             updatePaginationAfterBackgroundLoad();
         } catch(e) {}
     }
-    
     var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA'];
     for (var j = 0; j < countries.length; j++) {
         try {
@@ -710,7 +746,7 @@ function goToPage(page) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ============ GENRES (COM TRADUÇÃO) ============
+// ============ GENRES ============
 function renderGenres() {
     var scroll = document.getElementById('genresScroll');
     scroll.innerHTML = '';
@@ -743,7 +779,7 @@ function renderGenres() {
     });
 }
 
-// ============ FILTER (COM BUSCA POR PAÍS) ============
+// ============ FILTER ============
 function filterStations() {
     var filtered = allStations;
     if (currentGenre !== 'all') {
@@ -778,23 +814,63 @@ function filterStations() {
     goToPage(1);
 }
 
-// ============ MOST PLAYED ============
+// ============ MOST PLAYED (PAÍS + MUNDIAL + DINÂMICO) ============
 function showMostPlayed() {
-    var playedStations = Object.values(playHistory);
-    if (playedStations.length === 0) {
-        document.getElementById('stationList').innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">📊 ' + t('history') + '</p>';
-        document.getElementById('listTitle').textContent = t('mostPlayed');
-        document.getElementById('pagination').innerHTML = '';
-        return;
-    }
-    playedStations.sort(function(a, b) { return b.playCount - a.playCount; });
-    currentList = playedStations;
-    currentPage = 1;
-    totalPages = Math.ceil(playedStations.length / PAGE_SIZE);
-    document.getElementById('stationList').innerHTML = '';
-    document.getElementById('listTitle').textContent = '📊 ' + playedStations.length + ' ' + t('mostPlayed');
-    setupPagination();
-    goToPage(1);
+    if (mostPlayedInterval) clearInterval(mostPlayedInterval);
+    var listElement = document.getElementById('stationList');
+    listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">' + t('loading') + '</p></div>';
+    
+    getUserCountry().then(function(userCountry) {
+        var countryPromise = userCountry ? 
+            fetch(API + '/stations/bycountrycodeexact/' + userCountry + '/topclick/100?hidebroken=true')
+                .then(function(r) { return r.json(); })
+                .catch(function() { return []; }) : 
+            Promise.resolve([]);
+        
+        var worldPromise = fetch(API + '/stations/topclick/100?hidebroken=true')
+            .then(function(r) { return r.json(); })
+            .catch(function() { return []; });
+        
+        Promise.all([countryPromise, worldPromise]).then(function(results) {
+            var countryTop = results[0] || [];
+            var worldTop = results[1] || [];
+            var countryIds = {};
+            countryTop.forEach(function(s) { countryIds[s.stationuuid] = true; });
+            var worldFiltered = worldTop.filter(function(s) { return !countryIds[s.stationuuid]; });
+            var combined = countryTop.concat(worldFiltered);
+            
+            if (combined.length === 0) {
+                listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">📊 ' + t('history') + '</p>';
+                document.getElementById('listTitle').textContent = t('mostPlayed');
+                return;
+            }
+            
+            combined.sort(function(a, b) { return (b.clickcount || 0) - (a.clickcount || 0); });
+            currentList = combined;
+            currentPage = 1;
+            totalPages = Math.ceil(combined.length / PAGE_SIZE);
+            listElement.innerHTML = '';
+            document.getElementById('listTitle').textContent = '📊 Top 100 Most Played';
+            setupPagination();
+            goToPage(1);
+            
+            mostPlayedInterval = setInterval(function() {
+                var title = document.getElementById('listTitle').textContent;
+                if (title.indexOf('Most Played') === -1) { clearInterval(mostPlayedInterval); return; }
+                currentList.sort(function(a, b) {
+                    var simA = getSimulationData(a);
+                    var simB = getSimulationData(b);
+                    return (simB ? simB.currentListeners : 0) - (simA ? simA.currentListeners : 0);
+                });
+                var start = (currentPage - 1) * PAGE_SIZE;
+                var pageStations = currentList.slice(start, start + PAGE_SIZE);
+                document.getElementById('stationList').innerHTML = '';
+                var fragment = document.createDocumentFragment();
+                pageStations.forEach(function(station) { fragment.appendChild(createCard(station)); });
+                document.getElementById('stationList').appendChild(fragment);
+            }, 3000);
+        });
+    });
 }
 
 function updatePlayCount() {
@@ -811,7 +887,6 @@ function createCard(station) {
     if (currentStation && currentStation.stationuuid === station.stationuuid) card.classList.add('playing');
     var img = station.favicon ? '<img src="' + station.favicon + '" loading="lazy" onerror="this.parentElement.innerHTML=\'📻\'">' : '📻';
     var isFav = favorites.has(station.stationuuid);
-    var playCount = playHistory[station.stationuuid] ? playHistory[station.stationuuid].playCount : 0;
     var simData = getSimulationData(station);
     var liveCount = simData ? simData.currentListeners : Math.floor(Math.random() * 1000) + 50;
     card.innerHTML = 
@@ -819,8 +894,7 @@ function createCard(station) {
         '<div class="station-info">' +
             '<h3>' + station.name + '</h3>' +
             '<p>' + (station.country || '') + (station.bitrate ? ' · ' + station.bitrate + 'kbps' : '') + '</p>' +
-            '<span class="live-count" style="color:#00f5d4;font-size:10px;font-weight:600;display:block;margin-top:2px;">🌍 ' + formatNumber(liveCount) + ' ' + t('listening') + '</span>' +
-            (playCount > 0 ? '<span class="play-count" style="color:#6c63ff;font-size:10px;">🔊 ' + playCount + ' ' + t('plays') + '</span>' : '') +
+            '<span class="live-count" style="color:#00f5d4;font-size:11px;font-weight:700;display:block;margin-top:2px;">🌍 ' + liveCount.toLocaleString() + ' ' + t('listening') + '</span>' +
         '</div>' +
         '<button class="card-fav" data-uuid="' + station.stationuuid + '">' + (isFav ? '❤️' : '🤍') + '</button>';
     var favBtn = card.querySelector('.card-fav');
