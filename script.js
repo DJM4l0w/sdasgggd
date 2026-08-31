@@ -16,9 +16,12 @@ var isApiLoading = false;
 var hasInitialLoaded = false;
 var db = null;
 var sleepTimer = null;
+var playHistory = JSON.parse(localStorage.getItem('m4fmPlayHistory') || '{}');
+var myIP = localStorage.getItem('m4fmUserIP') || '';
 
 var genres = [
     {name:'All', tag:'all', emoji:'🌍'},
+    {name:'Most Played', tag:'mostplayed', emoji:'📊'},
     {name:'Dance', tag:'dance', emoji:'💃'},
     {name:'Electronic', tag:'electronic', emoji:'⚡'},
     {name:'House', tag:'house', emoji:'🏠'},
@@ -43,7 +46,22 @@ document.addEventListener('DOMContentLoaded', function() {
     setupMediaSession();
     setupAutoRefresh();
     hideSplashScreen();
+    getUserIP();
 });
+
+// ============ GET USER IP ============
+async function getUserIP() {
+    if (myIP) return;
+    try {
+        var response = await fetch('https://api.ipify.org?format=json');
+        var data = await response.json();
+        myIP = data.ip;
+        localStorage.setItem('m4fmUserIP', myIP);
+    } catch(e) {
+        myIP = 'local-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('m4fmUserIP', myIP);
+    }
+}
 
 // ============ SPLASH SCREEN ============
 function hideSplashScreen() {
@@ -62,11 +80,7 @@ function hideSplashScreen() {
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', function(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-        
-        if (e.code === 'Space') {
-            e.preventDefault();
-            togglePlay();
-        }
+        if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
         if (e.code === 'ArrowRight') nextStation();
         if (e.code === 'ArrowLeft') prevStation();
         if (e.code === 'KeyF') toggleFavorite();
@@ -77,48 +91,30 @@ function setupKeyboardShortcuts() {
 function setupMediaSession() {
     if ('mediaSession' in navigator) {
         navigator.mediaSession.setActionHandler('play', function() {
-            if (currentStation) {
-                audio.play();
-                isPlaying = true;
-                updatePlayerUI();
-            }
+            if (currentStation) { audio.play(); isPlaying = true; updatePlayerUI(); }
         });
-        
         navigator.mediaSession.setActionHandler('pause', function() {
-            audio.pause();
-            isPlaying = false;
-            updatePlayerUI();
+            audio.pause(); isPlaying = false; updatePlayerUI();
         });
-        
-        navigator.mediaSession.setActionHandler('previoustrack', function() {
-            prevStation();
-        });
-        
-        navigator.mediaSession.setActionHandler('nexttrack', function() {
-            nextStation();
-        });
+        navigator.mediaSession.setActionHandler('previoustrack', function() { prevStation(); });
+        navigator.mediaSession.setActionHandler('nexttrack', function() { nextStation(); });
     }
 }
 
 function updateMediaSession() {
     if (!('mediaSession' in navigator) || !currentStation) return;
-    
     navigator.mediaSession.metadata = new MediaMetadata({
         title: currentStation.name,
         artist: 'M4FMCLUB',
         album: currentStation.country || 'Live Radio',
-        artwork: currentStation.favicon ? [
-            { src: currentStation.favicon, sizes: '96x96', type: 'image/png' }
-        ] : []
+        artwork: currentStation.favicon ? [{ src: currentStation.favicon, sizes: '96x96', type: 'image/png' }] : []
     });
 }
 
 // ============ AUTO REFRESH ============
 function setupAutoRefresh() {
     setInterval(function() {
-        if (!isApiLoading && navigator.onLine && hasInitialLoaded) {
-            refreshFromAPI();
-        }
+        if (!isApiLoading && navigator.onLine && hasInitialLoaded) refreshFromAPI();
     }, 30 * 60 * 1000);
 }
 
@@ -126,7 +122,6 @@ function setupAutoRefresh() {
 function setSleepTimer(minutes) {
     clearTimeout(sleepTimer);
     showToast('⏰ Sleep timer: ' + minutes + ' min');
-    
     sleepTimer = setTimeout(function() {
         audio.pause();
         isPlaying = false;
@@ -146,41 +141,25 @@ function setupSearchEvents() {
     if (!searchInput) return;
     
     searchInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            searchInput.blur();
-        }
-        if (e.key === 'Escape') {
-            clearSearch();
-            searchInput.blur();
-        }
+        if (e.key === 'Enter') { e.preventDefault(); searchInput.blur(); }
+        if (e.key === 'Escape') { clearSearch(); searchInput.blur(); }
     });
     
     document.addEventListener('click', function(e) {
-        if (e.target !== searchInput && !e.target.closest('.search-box')) {
-            searchInput.blur();
-        }
+        if (e.target !== searchInput && !e.target.closest('.search-box')) searchInput.blur();
     });
 }
 
 // ============ INDEXEDDB ============
 function initDB() {
     var request = indexedDB.open('M4FMCLUB_DB', 1);
-    
     request.onupgradeneeded = function(e) {
         if (!e.target.result.objectStoreNames.contains('stations')) {
             e.target.result.createObjectStore('stations', { keyPath: 'stationuuid' });
         }
     };
-    
-    request.onsuccess = function(e) {
-        db = e.target.result;
-        loadCachedStations();
-    };
-    
-    request.onerror = function() {
-        loadFromAPI();
-    };
+    request.onsuccess = function(e) { db = e.target.result; loadCachedStations(); };
+    request.onerror = function() { loadFromAPI(); };
 }
 
 function loadCachedStations() {
@@ -189,27 +168,23 @@ function loadCachedStations() {
     
     request.onsuccess = function() {
         var cached = request.result;
-        
         if (cached && cached.length > 0) {
             allStations = cached;
             currentList = cached;
-            
             renderGenres();
             document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' Stations (cached)';
             document.getElementById('stationList').innerHTML = '';
-            
             hasInitialLoaded = true;
             setupPagination();
             goToPage(1);
             updateFavCount();
+            updatePlayCount();
             bindPlayerFavButton();
-            
             setTimeout(refreshFromAPI, 1000);
         } else {
             loadFromAPI();
         }
     };
-    
     request.onerror = loadFromAPI;
 }
 
@@ -217,21 +192,18 @@ function loadFromAPI() {
     renderGenres();
     loadTop30First();
     updateFavCount();
+    updatePlayCount();
     bindPlayerFavButton();
 }
 
 function saveToCache(stations) {
     if (!db) return;
-    
     try {
         var transaction = db.transaction(['stations'], 'readwrite');
         var store = transaction.objectStore('stations');
-        
         var batchSize = 500;
         for (var i = 0; i < stations.length; i += batchSize) {
-            stations.slice(i, i + batchSize).forEach(function(s) {
-                store.put(s);
-            });
+            stations.slice(i, i + batchSize).forEach(function(s) { store.put(s); });
         }
     } catch(e) {}
 }
@@ -240,10 +212,8 @@ function saveToCache(stations) {
 async function refreshFromAPI() {
     if (isApiLoading) return;
     isApiLoading = true;
-    
     var unique = {};
     allStations.forEach(function(s) { unique[s.stationuuid] = true; });
-    
     try {
         var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
         var topData = await topRes.json();
@@ -255,7 +225,6 @@ async function refreshFromAPI() {
         });
         updatePaginationAfterBackgroundLoad();
     } catch(e) {}
-    
     isApiLoading = false;
     setTimeout(loadMoreStationsWithOffset, 1000);
 }
@@ -263,26 +232,17 @@ async function refreshFromAPI() {
 async function loadTop30First() {
     var listElement = document.getElementById('stationList');
     listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">Loading top 30 stations...</p></div>';
-    
     try {
         var response = await fetch(API + '/stations/topvote/30?hidebroken=true');
         var top30 = await response.json();
-        
-        allStations = top30.filter(function(s) {
-            return s.url_resolved && s.lastcheckok === 1;
-        });
-        
+        allStations = top30.filter(function(s) { return s.url_resolved && s.lastcheckok === 1; });
         currentList = allStations;
-        
         document.getElementById('listTitle').textContent = '🏆 Top 30 Stations';
         document.getElementById('stationList').innerHTML = '';
-        
         hasInitialLoaded = true;
         setupPagination();
         goToPage(1);
-        
         setTimeout(loadAllStationsInBackground, 500);
-        
     } catch(e) {
         listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ Error loading.</p>';
     }
@@ -291,10 +251,8 @@ async function loadTop30First() {
 async function loadAllStationsInBackground() {
     if (isApiLoading) return;
     isApiLoading = true;
-    
     var unique = {};
     allStations.forEach(function(s) { unique[s.stationuuid] = true; });
-    
     try {
         var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
         var topData = await topRes.json();
@@ -308,7 +266,6 @@ async function loadAllStationsInBackground() {
     } catch(e) {}
     
     var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
-    
     for (var i = 0; i < allGenres.length; i++) {
         try {
             var gRes = await fetch(API + '/stations/search?tag=' + allGenres[i] + '&limit=200&hidebroken=true&order=clickcount&reverse=true');
@@ -324,7 +281,6 @@ async function loadAllStationsInBackground() {
     }
     
     var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA'];
-    
     for (var j = 0; j < countries.length; j++) {
         try {
             var cRes = await fetch(API + '/stations/bycountrycodeexact/' + countries[j] + '?limit=200&hidebroken=true&order=clickcount&reverse=true');
@@ -341,17 +297,14 @@ async function loadAllStationsInBackground() {
     
     saveToCache(allStations);
     isApiLoading = false;
-    
     setTimeout(loadMoreStationsWithOffset, 2000);
 }
 
 async function loadMoreStationsWithOffset() {
     if (isApiLoading) return;
     isApiLoading = true;
-    
     var unique = {};
     allStations.forEach(function(s) { unique[s.stationuuid] = true; });
-    
     var offset = 0;
     var maxAttempts = 50;
     var attempts = 0;
@@ -359,16 +312,9 @@ async function loadMoreStationsWithOffset() {
     while (allStations.length < 12000 && attempts < maxAttempts) {
         try {
             var response = await fetch(API + '/stations/search?limit=1000&offset=' + offset + '&hidebroken=true&order=clickcount&reverse=true');
-            
-            if (!response.ok) {
-                await new Promise(function(r) { setTimeout(r, 3000); });
-                attempts++;
-                continue;
-            }
-            
+            if (!response.ok) { await new Promise(function(r) { setTimeout(r, 3000); }); attempts++; continue; }
             var data = await response.json();
             if (data.length === 0) break;
-            
             var added = 0;
             data.forEach(function(s) {
                 if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
@@ -377,15 +323,11 @@ async function loadMoreStationsWithOffset() {
                     added++;
                 }
             });
-            
             if (added === 0) break;
-            
             offset += 1000;
             attempts = 0;
             updatePaginationAfterBackgroundLoad();
-            
             await new Promise(function(r) { setTimeout(r, 1000); });
-            
         } catch(e) {
             attempts++;
             await new Promise(function(r) { setTimeout(r, 3000); });
@@ -401,19 +343,14 @@ function updatePaginationAfterBackgroundLoad() {
     if (currentGenre === 'all' && !searchQuery && hasInitialLoaded) {
         currentList = allStations;
         totalPages = Math.ceil(allStations.length / PAGE_SIZE);
-        
         var titleElement = document.getElementById('listTitle');
-        if (titleElement) {
-            titleElement.textContent = '🌍 ' + allStations.length + ' Stations';
-        }
-        
+        if (titleElement) titleElement.textContent = '🌍 ' + allStations.length + ' Stations';
         setupPagination();
     }
 }
 
 function setupPagination() {
     totalPages = Math.ceil(currentList.length / PAGE_SIZE);
-    
     var paginationContainer = document.getElementById('pagination');
     if (!paginationContainer) {
         paginationContainer = document.createElement('div');
@@ -421,14 +358,12 @@ function setupPagination() {
         paginationContainer.className = 'pagination';
         document.querySelector('.main-content').appendChild(paginationContainer);
     }
-    
     renderPagination();
 }
 
 function renderPagination() {
     var container = document.getElementById('pagination');
     if (!container) return;
-    
     container.innerHTML = '';
     if (totalPages <= 1) return;
     
@@ -451,9 +386,7 @@ function renderPagination() {
         }
     }
     
-    for (var i = startPage; i <= endPage; i++) {
-        container.appendChild(createPageButton(i));
-    }
+    for (var i = startPage; i <= endPage; i++) container.appendChild(createPageButton(i));
     
     if (endPage < totalPages) {
         if (endPage < totalPages - 1) {
@@ -482,25 +415,18 @@ function createPageButton(pageNum) {
 
 function goToPage(page) {
     if (page < 1 || page > totalPages) return;
-    
     currentPage = page;
-    
     var start = (currentPage - 1) * PAGE_SIZE;
     var pageStations = currentList.slice(start, start + PAGE_SIZE);
-    
     document.getElementById('stationList').innerHTML = '';
-    
     var fragment = document.createDocumentFragment();
-    pageStations.forEach(function(station) {
-        fragment.appendChild(createCard(station));
-    });
-    
+    pageStations.forEach(function(station) { fragment.appendChild(createCard(station)); });
     document.getElementById('stationList').appendChild(fragment);
     renderPagination();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ============ GENRES (COM BOTÃO ALL CORRIGIDO) ============
+// ============ GENRES ============
 function renderGenres() {
     var scroll = document.getElementById('genresScroll');
     scroll.innerHTML = '';
@@ -514,19 +440,20 @@ function renderGenres() {
             document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('active'); });
             chip.classList.add('active');
             
-            // SE CLICAR EM "ALL" - RESET COMPLETO
+            if (g.tag === 'mostplayed') {
+                showMostPlayed();
+                return;
+            }
+            
             if (g.tag === 'all') {
                 searchQuery = '';
                 var searchInput = document.getElementById('searchInput');
                 if (searchInput) searchInput.value = '';
-                
                 currentList = allStations;
                 currentPage = 1;
                 totalPages = Math.ceil(allStations.length / PAGE_SIZE);
-                
                 document.getElementById('stationList').innerHTML = '';
                 document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' Stations';
-                
                 setupPagination();
                 goToPage(1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -540,13 +467,11 @@ function renderGenres() {
 
 function filterStations() {
     var filtered = allStations;
-    
     if (currentGenre !== 'all') {
         filtered = allStations.filter(function(s) {
             return s.tags && s.tags.toLowerCase().indexOf(currentGenre) !== -1;
         });
     }
-    
     if (searchQuery && searchQuery.length > 0) {
         var q = searchQuery.toLowerCase();
         filtered = filtered.filter(function(s) {
@@ -560,7 +485,6 @@ function filterStations() {
     currentList = filtered;
     currentPage = 1;
     totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-    
     var listElement = document.getElementById('stationList');
     listElement.innerHTML = '';
     
@@ -572,9 +496,38 @@ function filterStations() {
     }
     
     document.getElementById('listTitle').textContent = '🔍 ' + filtered.length + ' Results';
+    setupPagination();
+    goToPage(1);
+}
+
+// ============ MOST PLAYED ============
+function showMostPlayed() {
+    var playedStations = Object.values(playHistory);
+    
+    if (playedStations.length === 0) {
+        document.getElementById('stationList').innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">📊 No listening history yet</p>';
+        document.getElementById('listTitle').textContent = 'Most Played';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+    }
+    
+    playedStations.sort(function(a, b) { return b.playCount - a.playCount; });
+    
+    currentList = playedStations;
+    currentPage = 1;
+    totalPages = Math.ceil(playedStations.length / PAGE_SIZE);
+    
+    document.getElementById('stationList').innerHTML = '';
+    document.getElementById('listTitle').textContent = '📊 ' + playedStations.length + ' Most Played';
     
     setupPagination();
     goToPage(1);
+}
+
+function updatePlayCount() {
+    var count = Object.keys(playHistory).length;
+    var countElement = document.getElementById('playCount');
+    if (countElement) countElement.textContent = count;
 }
 
 // ============ CREATE CARD ============
@@ -583,32 +536,24 @@ function createCard(station) {
     card.className = 'station-card';
     card.dataset.uuid = station.stationuuid;
     
-    if (currentStation && currentStation.stationuuid === station.stationuuid) {
-        card.classList.add('playing');
-    }
+    if (currentStation && currentStation.stationuuid === station.stationuuid) card.classList.add('playing');
     
-    var img = station.favicon ? 
-        '<img src="' + station.favicon + '" loading="lazy" onerror="this.parentElement.innerHTML=\'📻\'">' : '📻';
-    
+    var img = station.favicon ? '<img src="' + station.favicon + '" loading="lazy" onerror="this.parentElement.innerHTML=\'📻\'">' : '📻';
     var isFav = favorites.has(station.stationuuid);
+    var playCount = playHistory[station.stationuuid] ? playHistory[station.stationuuid].playCount : 0;
     
     card.innerHTML = 
         '<div class="station-img">' + img + '</div>' +
         '<div class="station-info">' +
             '<h3>' + station.name + '</h3>' +
             '<p>' + (station.country || '') + (station.bitrate ? ' · ' + station.bitrate + 'kbps' : '') + '</p>' +
+            (playCount > 0 ? '<span class="play-count">🔊 ' + playCount + ' plays</span>' : '') +
         '</div>' +
         '<button class="card-fav" data-uuid="' + station.stationuuid + '">' + (isFav ? '❤️' : '🤍') + '</button>';
     
     var favBtn = card.querySelector('.card-fav');
-    favBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        toggleFav(station.stationuuid);
-    });
-    
-    card.addEventListener('click', function() {
-        playStation(station);
-    });
+    favBtn.addEventListener('click', function(e) { e.stopPropagation(); toggleFav(station.stationuuid); });
+    card.addEventListener('click', function() { playStation(station); });
     
     return card;
 }
@@ -616,15 +561,8 @@ function createCard(station) {
 // ============ FAVORITES ============
 function toggleFav(uuid) {
     var station = allStations.find(function(s) { return s.stationuuid === uuid; });
-    
-    if (!station) {
-        station = favStations.find(function(s) { return s.stationuuid === uuid; });
-    }
-    
-    if (!station) {
-        showToast('❌ Station not found');
-        return;
-    }
+    if (!station) station = favStations.find(function(s) { return s.stationuuid === uuid; });
+    if (!station) { showToast('❌ Station not found'); return; }
     
     if (favorites.has(uuid)) {
         favorites.delete(uuid);
@@ -638,13 +576,10 @@ function toggleFav(uuid) {
     
     localStorage.setItem('m4fmfavs', JSON.stringify(Array.from(favorites)));
     localStorage.setItem('m4fmfavStations', JSON.stringify(favStations));
-    
     updateFavCount();
     
     document.querySelectorAll('.card-fav').forEach(function(btn) {
-        if (btn.dataset.uuid === uuid) {
-            btn.textContent = favorites.has(uuid) ? '❤️' : '🤍';
-        }
+        if (btn.dataset.uuid === uuid) btn.textContent = favorites.has(uuid) ? '❤️' : '🤍';
     });
     
     var playerFavBtn = document.getElementById('favBtn');
@@ -655,29 +590,21 @@ function toggleFav(uuid) {
 
 function updateFavCount() {
     var countElement = document.getElementById('favCount');
-    if (countElement) {
-        countElement.textContent = favorites.size;
-    }
+    if (countElement) countElement.textContent = favorites.size;
 }
 
 function showFavorites() {
-    var listElement = document.getElementById('stationList');
-    var paginationElement = document.getElementById('pagination');
-    
     if (favStations.length === 0) {
-        listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">💔 No favorites yet</p>';
+        document.getElementById('stationList').innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">💔 No favorites yet</p>';
         document.getElementById('listTitle').textContent = 'Favorites';
-        if (paginationElement) paginationElement.innerHTML = '';
+        document.getElementById('pagination').innerHTML = '';
         return;
     }
-    
     currentList = favStations;
     currentPage = 1;
     totalPages = Math.ceil(favStations.length / PAGE_SIZE);
-    
-    listElement.innerHTML = '';
+    document.getElementById('stationList').innerHTML = '';
     document.getElementById('listTitle').textContent = '❤️ ' + favStations.length + ' Favorites';
-    
     setupPagination();
     goToPage(1);
 }
@@ -687,24 +614,16 @@ function bindPlayerFavButton() {
     var favBtn = document.getElementById('favBtn');
     if (favBtn) {
         favBtn.addEventListener('click', function() {
-            if (currentStation) {
-                toggleFav(currentStation.stationuuid);
-            } else {
-                showToast('❌ No station playing');
-            }
+            if (currentStation) toggleFav(currentStation.stationuuid);
+            else showToast('❌ No station playing');
         });
     }
 }
 
 function playStation(station) {
-    if (!station || !station.url_resolved) {
-        showToast('❌ Station unavailable');
-        return;
-    }
-    
+    if (!station || !station.url_resolved) { showToast('❌ Station unavailable'); return; }
     if (currentStation) audio.pause();
     currentStation = station;
-    
     audio.src = station.url_resolved;
     
     var timeout = setTimeout(function() {
@@ -722,7 +641,6 @@ function playStation(station) {
         updateMediaSession();
         trackPlay(station);
         showToast('▶️ ' + station.name);
-        
         document.querySelectorAll('.station-card').forEach(function(c) { c.classList.remove('playing'); });
         var card = document.querySelector('[data-uuid="' + station.stationuuid + '"]');
         if (card) card.classList.add('playing');
@@ -733,47 +651,45 @@ function playStation(station) {
 }
 
 function trackPlay(station) {
-    var history = JSON.parse(localStorage.getItem('m4fmHistory') || '[]');
-    history.unshift({ name: station.name, time: Date.now() });
-    history = history.slice(0, 100);
-    localStorage.setItem('m4fmHistory', JSON.stringify(history));
+    if (!playHistory[station.stationuuid]) {
+        playHistory[station.stationuuid] = {
+            name: station.name,
+            country: station.country,
+            favicon: station.favicon,
+            url_resolved: station.url_resolved,
+            bitrate: station.bitrate,
+            tags: station.tags,
+            playCount: 0,
+            lastPlayed: Date.now()
+        };
+    }
+    playHistory[station.stationuuid].playCount++;
+    playHistory[station.stationuuid].lastPlayed = Date.now();
+    localStorage.setItem('m4fmPlayHistory', JSON.stringify(playHistory));
+    updatePlayCount();
 }
 
 function togglePlay() {
     if (!currentStation) return;
-    
-    if (isPlaying) {
-        audio.pause();
-        isPlaying = false;
-    } else {
-        audio.play();
-        isPlaying = true;
-    }
+    if (isPlaying) { audio.pause(); isPlaying = false; }
+    else { audio.play(); isPlaying = true; }
     updatePlayerUI();
     updateMediaSession();
 }
 
 function updatePlayerUI() {
     if (!currentStation) return;
-    
-    var img = currentStation.favicon ? 
-        '<img src="' + currentStation.favicon + '" onerror="this.parentElement.innerHTML=\'📻\'">' : '📻';
-    
+    var img = currentStation.favicon ? '<img src="' + currentStation.favicon + '" onerror="this.parentElement.innerHTML=\'📻\'">' : '📻';
     document.getElementById('miniImg').innerHTML = img;
     document.getElementById('miniName').textContent = currentStation.name;
     document.getElementById('miniStatus').textContent = isPlaying ? '🔴 LIVE' : '⏸️ Paused';
     document.getElementById('miniPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
-    
     document.getElementById('playerArtwork').innerHTML = img;
     document.getElementById('playerName').textContent = currentStation.name;
-    document.getElementById('playerInfo').textContent = 
-        (currentStation.country || '') + ' · ' + (currentStation.bitrate || '') + ' kbps';
+    document.getElementById('playerInfo').textContent = (currentStation.country || '') + ' · ' + (currentStation.bitrate || '') + ' kbps';
     document.getElementById('mainPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
-    
     var favBtn = document.getElementById('favBtn');
-    if (favBtn) {
-        favBtn.textContent = favorites.has(currentStation.stationuuid) ? '❤️ Favorited' : '🤍 Favorite';
-    }
+    if (favBtn) favBtn.textContent = favorites.has(currentStation.stationuuid) ? '❤️ Favorited' : '🤍 Favorite';
 }
 
 function openPlayer() { document.getElementById('playerModal').style.display = 'flex'; }
@@ -793,32 +709,25 @@ function nextStation() {
 
 function setVolume(v) { audio.volume = v / 100; }
 
+function toggleFavorite() {
+    if (currentStation) toggleFav(currentStation.stationuuid);
+    else showToast('❌ No station playing');
+}
+
 // ============ SHARE ============
 function shareStation() {
     if (!currentStation) return;
-    
-    var shareText = '🎵 Listening to ' + currentStation.name + 
-                    (currentStation.country ? ' from ' + currentStation.country : '') + 
-                    ' now on the best M4FMCLUB app! 📻';
-    
+    var shareText = '🎵 Listening to ' + currentStation.name + (currentStation.country ? ' from ' + currentStation.country : '') + ' now on the best M4FMCLUB app! 📻';
     if (navigator.share) {
-        navigator.share({
-            title: 'M4FMCLUB',
-            text: shareText
-        }).then(function() {
+        navigator.share({ title: 'M4FMCLUB', text: shareText }).then(function() {
             showToast('✅ Shared!');
         }).catch(function(err) {
-            if (err.name !== 'AbortError') {
-                showToast('❌ Share failed');
-            }
+            if (err.name !== 'AbortError') showToast('❌ Share failed');
         });
     } else {
         if (navigator.clipboard) {
-            navigator.clipboard.writeText(shareText).then(function() {
-                showToast('📋 Copied!');
-            }).catch(function() {
-                showToast('❌ Could not copy');
-            });
+            navigator.clipboard.writeText(shareText).then(function() { showToast('📋 Copied!'); })
+            .catch(function() { showToast('❌ Could not copy'); });
         } else {
             showToast('📋 ' + currentStation.name);
         }
@@ -828,12 +737,7 @@ function shareStation() {
 // ============ SEARCH ============
 function doSearch(query) {
     searchQuery = query.trim();
-    
-    if (!searchQuery) {
-        clearSearch();
-        return;
-    }
-    
+    if (!searchQuery) { clearSearch(); return; }
     clearTimeout(window.searchTimeout);
     window.searchTimeout = setTimeout(filterStations, 300);
 }
@@ -842,13 +746,11 @@ function clearSearch() {
     searchQuery = '';
     var searchInput = document.getElementById('searchInput');
     if (searchInput) searchInput.value = '';
-    
     currentGenre = 'all';
     document.querySelectorAll('.chip').forEach(function(c) {
         c.classList.remove('active');
         if (c.textContent.indexOf('All') !== -1) c.classList.add('active');
     });
-    
     filterStations();
 }
 
