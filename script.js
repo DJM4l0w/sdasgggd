@@ -1223,13 +1223,12 @@ function shareStation() {
     
     var shareText = '🎵 ' + currentStation.name + 
                     (currentStation.country ? ' from ' + currentStation.country : '') + 
-                    ' - M4FMCLUB 📻';
+                    ' - M4FMCLUB APP 📻';
     
     if (navigator.share) {
         navigator.share({
-            title: 'M4FMCLUB',
-            text: shareText,
-            url: window.location.href
+            title: 'M4FMCLUB APP',
+            text: shareText
         }).then(function() {
             showToast('✅ ' + t('shared'));
         }).catch(function(err) {
