@@ -14,6 +14,7 @@ var currentGenre = 'all';
 var searchQuery = '';
 var isApiLoading = false;
 var hasInitialLoaded = false;
+var db = null;
 
 var genres = [
     {name:'All', tag:'all', emoji:'🌍'},
@@ -35,28 +36,158 @@ var genres = [
 ];
 
 document.addEventListener('DOMContentLoaded', function() {
-    init();
+    initDB();
 });
 
-function init() {
+// ============ INDEXEDDB PARA CACHE ============
+function initDB() {
+    var request = indexedDB.open('M4FMCLUB_DB', 1);
+    
+    request.onupgradeneeded = function(e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains('stations')) {
+            db.createObjectStore('stations', { keyPath: 'stationuuid' });
+        }
+    };
+    
+    request.onsuccess = function(e) {
+        db = e.target.result;
+        loadCachedStations();
+    };
+    
+    request.onerror = function(e) {
+        console.error('DB error:', e);
+        loadFromAPI();
+    };
+}
+
+// ============ CARREGAR DO CACHE PRIMEIRO ============
+function loadCachedStations() {
+    var transaction = db.transaction(['stations'], 'readonly');
+    var store = transaction.objectStore('stations');
+    var request = store.getAll();
+    
+    request.onsuccess = function() {
+        var cached = request.result;
+        
+        if (cached && cached.length > 0) {
+            console.log('✅ Loaded ' + cached.length + ' stations from cache');
+            allStations = cached;
+            currentList = cached;
+            
+            renderGenres();
+            document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' Stations (cached)';
+            document.getElementById('stationList').innerHTML = '';
+            
+            hasInitialLoaded = true;
+            setupPagination();
+            goToPage(1);
+            updateFavCount();
+            bindPlayerFavButton();
+            
+            // Atualizar em background
+            setTimeout(function() {
+                refreshFromAPI();
+            }, 1000);
+        } else {
+            loadFromAPI();
+        }
+    };
+    
+    request.onerror = function() {
+        loadFromAPI();
+    };
+}
+
+// ============ CARREGAR DA API (SEM CACHE) ============
+function loadFromAPI() {
     renderGenres();
     loadTop30First();
     updateFavCount();
     bindPlayerFavButton();
 }
 
-// ============ CONECTAR BOTÃO DE FAVORITO DO PLAYER ============
-function bindPlayerFavButton() {
-    var favBtn = document.getElementById('favBtn');
-    if (favBtn) {
-        favBtn.addEventListener('click', function() {
-            if (currentStation) {
-                toggleFav(currentStation.stationuuid);
-            } else {
-                showToast('❌ No station playing');
+// ============ SALVAR NO CACHE ============
+function saveToCache(stations) {
+    if (!db) return;
+    
+    try {
+        var transaction = db.transaction(['stations'], 'readwrite');
+        var store = transaction.objectStore('stations');
+        
+        // Salvar em lotes de 500 para não travar
+        var batchSize = 500;
+        for (var i = 0; i < stations.length; i += batchSize) {
+            var batch = stations.slice(i, i + batchSize);
+            batch.forEach(function(s) {
+                store.put(s);
+            });
+        }
+        
+        console.log('💾 Saved ' + stations.length + ' stations to cache');
+    } catch(e) {
+        console.log('Cache save error:', e);
+    }
+}
+
+// ============ ATUALIZAR DA API EM BACKGROUND ============
+async function refreshFromAPI() {
+    if (isApiLoading) return;
+    isApiLoading = true;
+    
+    console.log('🔄 Refreshing from API...');
+    
+    var unique = {};
+    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
+    
+    try {
+        var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
+        var topData = await topRes.json();
+        topData.forEach(function(s) {
+            if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                unique[s.stationuuid] = true;
+                allStations.push(s);
             }
         });
+        updatePaginationAfterBackgroundLoad();
+    } catch(e) {}
+    
+    var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
+    
+    for (var i = 0; i < allGenres.length; i++) {
+        try {
+            var gRes = await fetch(API + '/stations/search?tag=' + allGenres[i] + '&limit=200&hidebroken=true&order=clickcount&reverse=true');
+            var gData = await gRes.json();
+            gData.forEach(function(s) {
+                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                    unique[s.stationuuid] = true;
+                    allStations.push(s);
+                }
+            });
+            updatePaginationAfterBackgroundLoad();
+        } catch(e) {}
     }
+    
+    var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA'];
+    
+    for (var j = 0; j < countries.length; j++) {
+        try {
+            var cRes = await fetch(API + '/stations/bycountrycodeexact/' + countries[j] + '?limit=200&hidebroken=true&order=clickcount&reverse=true');
+            var cData = await cRes.json();
+            cData.forEach(function(s) {
+                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                    unique[s.stationuuid] = true;
+                    allStations.push(s);
+                }
+            });
+            updatePaginationAfterBackgroundLoad();
+        } catch(e) {}
+    }
+    
+    // Salvar no cache após carregar tudo
+    saveToCache(allStations);
+    
+    isApiLoading = false;
 }
 
 async function loadTop30First() {
@@ -140,10 +271,12 @@ async function loadAllStationsInBackground() {
         } catch(e) {}
     }
     
+    // SALVAR NO CACHE
+    saveToCache(allStations);
+    
     isApiLoading = false;
 }
 
-// ============ ATUALIZAR PAGINAÇÃO APÓS CARREGAR ============
 function updatePaginationAfterBackgroundLoad() {
     if (currentGenre === 'all' && !searchQuery && hasInitialLoaded) {
         currentList = allStations;
@@ -364,7 +497,6 @@ function toggleFav(uuid) {
         }
     });
     
-    // Atualizar botão do player
     var playerFavBtn = document.getElementById('favBtn');
     if (playerFavBtn) {
         if (currentStation && currentStation.stationuuid === uuid) {
@@ -400,6 +532,19 @@ function showFavorites() {
     
     setupPagination();
     goToPage(1);
+}
+
+function bindPlayerFavButton() {
+    var favBtn = document.getElementById('favBtn');
+    if (favBtn) {
+        favBtn.addEventListener('click', function() {
+            if (currentStation) {
+                toggleFav(currentStation.stationuuid);
+            } else {
+                showToast('❌ No station playing');
+            }
+        });
+    }
 }
 
 function playStation(station) {
