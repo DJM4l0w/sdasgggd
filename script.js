@@ -40,36 +40,21 @@ document.addEventListener('DOMContentLoaded', function() {
     setupSearchEvents();
 });
 
-// ============ SEARCH EVENTS (ENTER PARA FECHAR) ============
 function setupSearchEvents() {
     var searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
     
-    // Fechar com Enter
     searchInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
             e.preventDefault();
-            searchInput.blur(); // Fecha o teclado
-            
-            if (searchInput.value.trim() === '') {
-                clearSearch();
-            }
+            searchInput.blur();
         }
-        
         if (e.key === 'Escape') {
             clearSearch();
             searchInput.blur();
         }
     });
     
-    // Limpar quando ficar vazio
-    searchInput.addEventListener('input', function() {
-        if (this.value.trim() === '') {
-            clearSearch();
-        }
-    });
-    
-    // Fechar teclado quando clicar fora
     document.addEventListener('click', function(e) {
         if (e.target !== searchInput && !e.target.closest('.search-box')) {
             searchInput.blur();
@@ -77,14 +62,12 @@ function setupSearchEvents() {
     });
 }
 
-// ============ INDEXEDDB ============
 function initDB() {
     var request = indexedDB.open('M4FMCLUB_DB', 1);
     
     request.onupgradeneeded = function(e) {
-        var db = e.target.result;
-        if (!db.objectStoreNames.contains('stations')) {
-            db.createObjectStore('stations', { keyPath: 'stationuuid' });
+        if (!e.target.result.objectStoreNames.contains('stations')) {
+            e.target.result.createObjectStore('stations', { keyPath: 'stationuuid' });
         }
     };
     
@@ -93,15 +76,14 @@ function initDB() {
         loadCachedStations();
     };
     
-    request.onerror = function(e) {
+    request.onerror = function() {
         loadFromAPI();
     };
 }
 
 function loadCachedStations() {
     var transaction = db.transaction(['stations'], 'readonly');
-    var store = transaction.objectStore('stations');
-    var request = store.getAll();
+    var request = transaction.objectStore('stations').getAll();
     
     request.onsuccess = function() {
         var cached = request.result;
@@ -120,17 +102,13 @@ function loadCachedStations() {
             updateFavCount();
             bindPlayerFavButton();
             
-            setTimeout(function() {
-                refreshFromAPI();
-            }, 1000);
+            setTimeout(refreshFromAPI, 1000);
         } else {
             loadFromAPI();
         }
     };
     
-    request.onerror = function() {
-        loadFromAPI();
-    };
+    request.onerror = loadFromAPI;
 }
 
 function loadFromAPI() {
@@ -149,8 +127,7 @@ function saveToCache(stations) {
         
         var batchSize = 500;
         for (var i = 0; i < stations.length; i += batchSize) {
-            var batch = stations.slice(i, i + batchSize);
-            batch.forEach(function(s) {
+            stations.slice(i, i + batchSize).forEach(function(s) {
                 store.put(s);
             });
         }
@@ -177,10 +154,7 @@ async function refreshFromAPI() {
     } catch(e) {}
     
     isApiLoading = false;
-    
-    setTimeout(function() {
-        loadMoreStationsWithOffset();
-    }, 1000);
+    setTimeout(loadMoreStationsWithOffset, 1000);
 }
 
 async function loadTop30First() {
@@ -204,9 +178,7 @@ async function loadTop30First() {
         setupPagination();
         goToPage(1);
         
-        setTimeout(function() {
-            loadAllStationsInBackground();
-        }, 500);
+        setTimeout(loadAllStationsInBackground, 500);
         
     } catch(e) {
         listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ Error loading.</p>';
@@ -267,9 +239,7 @@ async function loadAllStationsInBackground() {
     saveToCache(allStations);
     isApiLoading = false;
     
-    setTimeout(function() {
-        loadMoreStationsWithOffset();
-    }, 2000);
+    setTimeout(loadMoreStationsWithOffset, 2000);
 }
 
 async function loadMoreStationsWithOffset() {
@@ -288,13 +258,12 @@ async function loadMoreStationsWithOffset() {
             var response = await fetch(API + '/stations/search?limit=1000&offset=' + offset + '&hidebroken=true&order=clickcount&reverse=true');
             
             if (!response.ok) {
-                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                await new Promise(function(r) { setTimeout(r, 3000); });
                 attempts++;
                 continue;
             }
             
             var data = await response.json();
-            
             if (data.length === 0) break;
             
             var added = 0;
@@ -310,14 +279,13 @@ async function loadMoreStationsWithOffset() {
             
             offset += 1000;
             attempts = 0;
-            
             updatePaginationAfterBackgroundLoad();
             
-            await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+            await new Promise(function(r) { setTimeout(r, 1000); });
             
         } catch(e) {
             attempts++;
-            await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+            await new Promise(function(r) { setTimeout(r, 3000); });
         }
     }
     
@@ -358,7 +326,6 @@ function renderPagination() {
     if (!container) return;
     
     container.innerHTML = '';
-    
     if (totalPages <= 1) return;
     
     var prevBtn = document.createElement('button');
@@ -415,8 +382,7 @@ function goToPage(page) {
     currentPage = page;
     
     var start = (currentPage - 1) * PAGE_SIZE;
-    var end = start + PAGE_SIZE;
-    var pageStations = currentList.slice(start, end);
+    var pageStations = currentList.slice(start, start + PAGE_SIZE);
     
     document.getElementById('stationList').innerHTML = '';
     
@@ -460,12 +426,10 @@ function filterStations() {
     if (searchQuery && searchQuery.length > 0) {
         var q = searchQuery.toLowerCase();
         filtered = filtered.filter(function(s) {
-            var nameMatch = s.name && s.name.toLowerCase().indexOf(q) !== -1;
-            var countryMatch = s.country && s.country.toLowerCase().indexOf(q) !== -1;
-            var tagsMatch = s.tags && s.tags.toLowerCase().indexOf(q) !== -1;
-            var stateMatch = s.state && s.state.toLowerCase().indexOf(q) !== -1;
-            
-            return nameMatch || countryMatch || tagsMatch || stateMatch;
+            return (s.name && s.name.toLowerCase().indexOf(q) !== -1) ||
+                   (s.country && s.country.toLowerCase().indexOf(q) !== -1) ||
+                   (s.tags && s.tags.toLowerCase().indexOf(q) !== -1) ||
+                   (s.state && s.state.toLowerCase().indexOf(q) !== -1);
         });
     }
     
@@ -474,14 +438,12 @@ function filterStations() {
     totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     
     var listElement = document.getElementById('stationList');
-    var paginationElement = document.getElementById('pagination');
-    
     listElement.innerHTML = '';
     
     if (filtered.length === 0) {
         listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">🔍 No stations found</p>';
         document.getElementById('listTitle').textContent = 'Search Results';
-        if (paginationElement) paginationElement.innerHTML = '';
+        document.getElementById('pagination').innerHTML = '';
         return;
     }
     
@@ -616,9 +578,7 @@ function doSearch(query) {
     }
     
     clearTimeout(window.searchTimeout);
-    window.searchTimeout = setTimeout(function() {
-        filterStations();
-    }, 300);
+    window.searchTimeout = setTimeout(filterStations, 300);
 }
 
 function clearSearch() {
@@ -629,7 +589,9 @@ function clearSearch() {
     currentGenre = 'all';
     document.querySelectorAll('.chip').forEach(function(c) {
         c.classList.remove('active');
-        if (c.getAttribute('data-genre') === 'all') c.classList.add('active');
+        if (c.getAttribute('data-genre') === 'all' || c.textContent.indexOf('All') !== -1) {
+            c.classList.add('active');
+        }
     });
     
     filterStations();
@@ -720,7 +682,6 @@ function nextStation() {
 
 function setVolume(v) { audio.volume = v / 100; }
 
-// ============ SHARE CORRIGIDO - SEM URL DA RÁDIO ============
 function shareStation() {
     if (!currentStation) return;
     
@@ -732,17 +693,14 @@ function shareStation() {
         navigator.share({
             title: 'M4FMCLUB',
             text: shareText
-            // REMOVIDO: url - não compartilha o link da rádio
         }).then(function() {
             showToast('✅ Shared!');
         }).catch(function(err) {
-            // Usuário cancelou ou erro
             if (err.name !== 'AbortError') {
                 showToast('❌ Share failed');
             }
         });
     } else {
-        // Fallback: copiar apenas o texto
         if (navigator.clipboard) {
             navigator.clipboard.writeText(shareText).then(function() {
                 showToast('📋 Copied!');
