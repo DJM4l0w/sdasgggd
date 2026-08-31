@@ -8,6 +8,7 @@ var isLoading = false;
 var currentStation = null;
 var audio = new Audio();
 var isPlaying = false;
+var isMuted = false;
 var favorites = new Set(JSON.parse(localStorage.getItem('m4fmfavs') || '[]'));
 var favStations = JSON.parse(localStorage.getItem('m4fmfavStations') || '[]');
 var currentGenre = 'all';
@@ -35,7 +36,9 @@ var translationsData = {
         'stationNotResponding': 'Station not responding', 'noStationPlaying': 'No station playing',
         'alreadyFirst': 'Already at first station', 'alreadyLast': 'Already at last station',
         'searchResults': 'Search Results', 'topStations': 'Top 30 Stations',
-        'globalTop': 'Global Top Live', 'cached': 'cached', 'history': 'No listening history yet'
+        'globalTop': 'Global Top Live', 'cached': 'cached', 'history': 'No listening history yet',
+        'muted': 'Muted', 'soundOn': 'Sound on', 'sleep': 'Sleep', 'sleepSet': 'Sleep timer set',
+        'sleepEnded': 'Sleep timer ended', 'sleepCancelled': 'Sleep timer cancelled'
     },
     'pt': {
         'search': 'Buscar rádios...', 'loading': 'Carregando estações...',
@@ -48,7 +51,9 @@ var translationsData = {
         'stationNotResponding': 'Estação não respondeu', 'noStationPlaying': 'Nenhuma estação tocando',
         'alreadyFirst': 'Já está na primeira estação', 'alreadyLast': 'Já está na última estação',
         'searchResults': 'Resultados da Busca', 'topStations': 'Top 30 Estações',
-        'globalTop': 'Top Global Ao Vivo', 'cached': 'em cache', 'history': 'Nenhum histórico ainda'
+        'globalTop': 'Top Global Ao Vivo', 'cached': 'em cache', 'history': 'Nenhum histórico ainda',
+        'muted': 'Mutado', 'soundOn': 'Som ativado', 'sleep': 'Sleep', 'sleepSet': 'Sleep timer definido',
+        'sleepEnded': 'Sleep timer encerrado', 'sleepCancelled': 'Sleep timer cancelado'
     },
     'es': {
         'search': 'Buscar radios...', 'loading': 'Cargando estaciones...',
@@ -61,7 +66,9 @@ var translationsData = {
         'stationNotResponding': 'Estación no responde', 'noStationPlaying': 'Ninguna estación sonando',
         'alreadyFirst': 'Ya está en la primera', 'alreadyLast': 'Ya está en la última',
         'searchResults': 'Resultados de Búsqueda', 'topStations': 'Top 30 Estaciones',
-        'globalTop': 'Top Global En Vivo', 'cached': 'en caché', 'history': 'Sin historial aún'
+        'globalTop': 'Top Global En Vivo', 'cached': 'en caché', 'history': 'Sin historial aún',
+        'muted': 'Silenciado', 'soundOn': 'Sonido activado', 'sleep': 'Dormir', 'sleepSet': 'Timer configurado',
+        'sleepEnded': 'Timer terminado', 'sleepCancelled': 'Timer cancelado'
     },
     'fr': {
         'search': 'Rechercher des radios...', 'loading': 'Chargement...',
@@ -74,7 +81,9 @@ var translationsData = {
         'stationNotResponding': 'Station ne répond pas', 'noStationPlaying': 'Aucune station',
         'alreadyFirst': 'Déjà à la première', 'alreadyLast': 'Déjà à la dernière',
         'searchResults': 'Résultats', 'topStations': 'Top 30 Stations',
-        'globalTop': 'Top Global Direct', 'cached': 'en cache', 'history': 'Pas d\'historique'
+        'globalTop': 'Top Global Direct', 'cached': 'en cache', 'history': 'Pas d\'historique',
+        'muted': 'Muet', 'soundOn': 'Son activé', 'sleep': 'Sommeil', 'sleepSet': 'Minuteur réglé',
+        'sleepEnded': 'Minuteur terminé', 'sleepCancelled': 'Minuteur annulé'
     }
 };
 
@@ -239,6 +248,11 @@ function showToast(msg) {
     if (msg.indexOf('Already at last') !== -1) translated = '📻 ' + t('alreadyLast');
     if (msg.indexOf('Shared') !== -1) translated = '✅ ' + t('shared');
     if (msg.indexOf('Copied') !== -1) translated = '📋 ' + t('copied');
+    if (msg.indexOf('Muted') !== -1) translated = '🔇 ' + t('muted');
+    if (msg.indexOf('Sound on') !== -1) translated = '🔊 ' + t('soundOn');
+    if (msg.indexOf('Sleep') !== -1 && msg.indexOf('min') !== -1) translated = '⏰ ' + t('sleepSet') + ': ' + msg.split(': ')[1];
+    if (msg.indexOf('Sleep timer ended') !== -1) translated = '😴 ' + t('sleepEnded');
+    if (msg.indexOf('Sleep cancelled') !== -1) translated = '⏰ ' + t('sleepCancelled');
     toast.textContent = translated;
     toast.classList.add('show');
     clearTimeout(toast._timeout);
@@ -447,23 +461,6 @@ function setupAutoRefresh() {
     setInterval(function() {
         if (!isApiLoading && navigator.onLine && hasInitialLoaded) refreshFromAPI();
     }, 30 * 60 * 1000);
-}
-
-// ============ SLEEP TIMER ============
-function setSleepTimer(minutes) {
-    clearTimeout(sleepTimer);
-    showToast('⏰ Sleep timer: ' + minutes + ' min');
-    sleepTimer = setTimeout(function() {
-        audio.pause();
-        isPlaying = false;
-        updatePlayerUI();
-        showToast('😴 Sleep timer ended');
-    }, minutes * 60 * 1000);
-}
-
-function cancelSleepTimer() {
-    clearTimeout(sleepTimer);
-    showToast('⏰ Sleep timer cancelled');
 }
 
 // ============ SEARCH EVENTS ============
@@ -811,19 +808,15 @@ function filterStations() {
     goToPage(1);
 }
 
-
 // ============ MOST PLAYED (APENAS TOP 100 MUNDIAL) ============
 function showMostPlayed() {
     if (mostPlayedInterval) clearInterval(mostPlayedInterval);
     var listElement = document.getElementById('stationList');
     listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">' + t('loading') + '</p></div>';
     
-    // Buscar APENAS Top 100 Mundial
     fetch(API + '/stations/topclick/100?hidebroken=true')
         .then(function(r) { return r.json(); })
         .then(function(worldTop) {
-            console.log('📊 Top 100 Mundial:', worldTop.length);
-            
             var combined = worldTop || [];
             
             if (combined.length === 0) {
@@ -845,7 +838,6 @@ function showMostPlayed() {
             setupPagination();
             goToPage(1);
             
-            // Atualizar ordenação a cada 3 segundos
             mostPlayedInterval = setInterval(function() {
                 var title = document.getElementById('listTitle').textContent;
                 if (title.indexOf('Most Played') === -1) { 
@@ -866,10 +858,10 @@ function showMostPlayed() {
             }, 3000);
         })
         .catch(function(err) {
-            console.log('Erro:', err);
             listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ ' + t('error') + '</p>';
         });
 }
+
 // ============ CREATE CARD ============
 function createCard(station) {
     var card = document.createElement('div');
@@ -917,6 +909,11 @@ function toggleFav(uuid) {
     var playerFavBtn = document.getElementById('favBtn');
     if (playerFavBtn && currentStation && currentStation.stationuuid === uuid) {
         playerFavBtn.textContent = favorites.has(uuid) ? '❤️ ' + t('favorited') : '🤍 ' + t('favorite');
+        if (favorites.has(uuid)) {
+            playerFavBtn.classList.add('favorited');
+        } else {
+            playerFavBtn.classList.remove('favorited');
+        }
     }
 }
 
@@ -939,6 +936,54 @@ function showFavorites() {
     document.getElementById('listTitle').textContent = '❤️ ' + favStations.length + ' ' + t('favorites');
     setupPagination();
     goToPage(1);
+}
+
+// ============ PLAYER PREMIUM FUNCTIONS ============
+function toggleMute() {
+    isMuted = !isMuted;
+    var volumeIcon = document.getElementById('volumeIcon');
+    var volumeSlider = document.getElementById('volumeSlider');
+    
+    if (isMuted) {
+        audio.volume = 0;
+        if (volumeIcon) volumeIcon.textContent = '🔇';
+        if (volumeSlider) volumeSlider.value = 0;
+        showToast('🔇 Muted');
+    } else {
+        audio.volume = 0.8;
+        if (volumeIcon) volumeIcon.textContent = '🔊';
+        if (volumeSlider) volumeSlider.value = 80;
+        showToast('🔊 Sound on');
+    }
+}
+
+function toggleSleepMenu() {
+    var menu = document.getElementById('sleepMenu');
+    if (menu) {
+        menu.style.display = (menu.style.display === 'none' || menu.style.display === '') ? 'flex' : 'none';
+    }
+}
+
+function setSleep(minutes) {
+    clearTimeout(sleepTimer);
+    sleepTimer = setTimeout(function() {
+        audio.pause();
+        isPlaying = false;
+        var modal = document.getElementById('playerModal');
+        var playBtn = document.getElementById('mainPlayBtn');
+        if (modal) modal.classList.add('paused');
+        if (playBtn) playBtn.textContent = '▶️';
+        showToast('😴 Sleep timer ended');
+    }, minutes * 60 * 1000);
+    
+    toggleSleepMenu();
+    showToast('⏰ Sleep: ' + minutes + ' min');
+}
+
+function cancelSleep() {
+    clearTimeout(sleepTimer);
+    toggleSleepMenu();
+    showToast('⏰ Sleep cancelled');
 }
 
 // ============ PLAYER ============
@@ -972,8 +1017,15 @@ function playStation(station) {
 
 function togglePlay() {
     if (!currentStation) return;
-    if (isPlaying) { audio.pause(); isPlaying = false; }
-    else { audio.play(); isPlaying = true; }
+    
+    if (isPlaying) {
+        audio.pause();
+        isPlaying = false;
+    } else {
+        audio.play();
+        isPlaying = true;
+    }
+    
     updatePlayerUI();
     updateMediaSession();
 }
@@ -981,16 +1033,38 @@ function togglePlay() {
 function updatePlayerUI() {
     if (!currentStation) return;
     var img = currentStation.favicon ? '<img src="' + currentStation.favicon + '" onerror="this.parentElement.innerHTML=\'📻\'">' : '📻';
+    
     document.getElementById('miniImg').innerHTML = img;
     document.getElementById('miniName').textContent = currentStation.name;
     document.getElementById('miniStatus').textContent = isPlaying ? '🔴 ' + t('live') : '⏸️ ' + t('paused');
     document.getElementById('miniPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
+    
     document.getElementById('playerArtwork').innerHTML = img;
     document.getElementById('playerName').textContent = currentStation.name;
     document.getElementById('playerInfo').textContent = (currentStation.country || '') + ' · ' + (currentStation.bitrate || '') + ' kbps';
     document.getElementById('mainPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
+    
+    // Atualizar animações
+    var modal = document.getElementById('playerModal');
+    if (modal) {
+        if (isPlaying) {
+            modal.classList.remove('paused');
+        } else {
+            modal.classList.add('paused');
+        }
+    }
+    
+    // Atualizar favorito
     var favBtn = document.getElementById('favBtn');
-    if (favBtn) favBtn.textContent = favorites.has(currentStation.stationuuid) ? '❤️ ' + t('favorited') : '🤍 ' + t('favorite');
+    if (favBtn) {
+        if (favorites.has(currentStation.stationuuid)) {
+            favBtn.textContent = '❤️ ' + t('favorited');
+            favBtn.classList.add('favorited');
+        } else {
+            favBtn.textContent = '🤍 ' + t('favorite');
+            favBtn.classList.remove('favorited');
+        }
+    }
 }
 
 function openPlayer() { document.getElementById('playerModal').style.display = 'flex'; }
@@ -1008,7 +1082,10 @@ function nextStation() {
     else showToast('📻 ' + t('alreadyLast'));
 }
 
-function setVolume(v) { audio.volume = v / 100; }
+function setVolume(v) { 
+    audio.volume = v / 100; 
+    if (v > 0) isMuted = false;
+}
 
 function toggleFavorite() {
     if (currentStation) toggleFav(currentStation.stationuuid);
