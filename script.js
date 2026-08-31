@@ -666,3 +666,162 @@ function showToast(msg) {
 
 audio.addEventListener('playing', function() { isPlaying = true; updatePlayerUI(); });
 audio.addEventListener('pause', function() { isPlaying = false; updatePlayerUI(); });
+
+// Adicione esta função para continuar carregando após travar
+
+async function loadMoreStationsWithOffset() {
+    if (isApiLoading) return;
+    isApiLoading = true;
+    
+    console.log('📡 Loading more stations with offset...');
+    
+    var unique = {};
+    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
+    
+    var offset = 0;
+    var maxAttempts = 50;
+    var attempts = 0;
+    
+    while (allStations.length < 12000 && attempts < maxAttempts) {
+        try {
+            var response = await fetch(API + '/stations/search?limit=1000&offset=' + offset + '&hidebroken=true&order=clickcount&reverse=true');
+            
+            if (!response.ok) {
+                console.log('⚠️ API rate limit reached. Waiting...');
+                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+                attempts++;
+                continue;
+            }
+            
+            var data = await response.json();
+            
+            if (data.length === 0) break;
+            
+            var added = 0;
+            data.forEach(function(s) {
+                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                    unique[s.stationuuid] = true;
+                    allStations.push(s);
+                    added++;
+                }
+            });
+            
+            console.log('✅ Offset ' + offset + ': +' + added + ' (Total: ' + allStations.length + ')');
+            
+            if (added === 0) break;
+            
+            offset += 1000;
+            attempts = 0;
+            
+            updatePaginationAfterBackgroundLoad();
+            
+            // Pequena pausa para não sobrecarregar
+            await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+            
+        } catch(e) {
+            console.log('❌ Error at offset ' + offset);
+            attempts++;
+            await new Promise(function(resolve) { setTimeout(resolve, 3000); });
+        }
+    }
+    
+    // Salvar no cache
+    saveToCache(allStations);
+    
+    isApiLoading = false;
+    console.log('🎉 Final: ' + allStations.length + ' stations');
+}
+
+// Modifique a função loadAllStationsInBackground para chamar o fallback
+async function loadAllStationsInBackground() {
+    if (isApiLoading) return;
+    isApiLoading = true;
+    
+    var unique = {};
+    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
+    
+    // Top 1000
+    try {
+        var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
+        var topData = await topRes.json();
+        topData.forEach(function(s) {
+            if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                unique[s.stationuuid] = true;
+                allStations.push(s);
+            }
+        });
+        updatePaginationAfterBackgroundLoad();
+    } catch(e) {}
+    
+    // Gêneros
+    var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
+    
+    for (var i = 0; i < allGenres.length; i++) {
+        try {
+            var gRes = await fetch(API + '/stations/search?tag=' + allGenres[i] + '&limit=200&hidebroken=true&order=clickcount&reverse=true');
+            var gData = await gRes.json();
+            gData.forEach(function(s) {
+                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                    unique[s.stationuuid] = true;
+                    allStations.push(s);
+                }
+            });
+            updatePaginationAfterBackgroundLoad();
+        } catch(e) {}
+    }
+    
+    // Países
+    var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA'];
+    
+    for (var j = 0; j < countries.length; j++) {
+        try {
+            var cRes = await fetch(API + '/stations/bycountrycodeexact/' + countries[j] + '?limit=200&hidebroken=true&order=clickcount&reverse=true');
+            var cData = await cRes.json();
+            cData.forEach(function(s) {
+                if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                    unique[s.stationuuid] = true;
+                    allStations.push(s);
+                }
+            });
+            updatePaginationAfterBackgroundLoad();
+        } catch(e) {}
+    }
+    
+    saveToCache(allStations);
+    isApiLoading = false;
+    
+    // CONTINUAR CARREGANDO COM OFFSET (fallback)
+    setTimeout(function() {
+        loadMoreStationsWithOffset();
+    }, 2000);
+}
+
+// Modifique refreshFromAPI para também usar offset
+async function refreshFromAPI() {
+    if (isApiLoading) return;
+    isApiLoading = true;
+    
+    console.log('🔄 Refreshing from API...');
+    
+    var unique = {};
+    allStations.forEach(function(s) { unique[s.stationuuid] = true; });
+    
+    try {
+        var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
+        var topData = await topRes.json();
+        topData.forEach(function(s) {
+            if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
+                unique[s.stationuuid] = true;
+                allStations.push(s);
+            }
+        });
+        updatePaginationAfterBackgroundLoad();
+    } catch(e) {}
+    
+    isApiLoading = false;
+    
+    // Continuar com offset
+    setTimeout(function() {
+        loadMoreStationsWithOffset();
+    }, 1000);
+}
