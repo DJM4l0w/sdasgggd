@@ -720,19 +720,38 @@ function nextStation() {
 
 function setVolume(v) { audio.volume = v / 100; }
 
+// ============ SHARE CORRIGIDO - SEM URL DA RÁDIO ============
 function shareStation() {
     if (!currentStation) return;
     
-    var shareText = 'Listening to ' + currentStation.name + ' now on the best M4FMCLUB app! 📻🎵';
+    var shareText = '🎵 Listening to ' + currentStation.name + 
+                    (currentStation.country ? ' from ' + currentStation.country : '') + 
+                    ' now on the best M4FMCLUB app! 📻';
     
     if (navigator.share) {
         navigator.share({
-            title: 'M4FMCLUB - ' + currentStation.name,
-            text: shareText,
-            url: currentStation.homepage || window.location.href
-        }).catch(function() {});
+            title: 'M4FMCLUB',
+            text: shareText
+            // REMOVIDO: url - não compartilha o link da rádio
+        }).then(function() {
+            showToast('✅ Shared!');
+        }).catch(function(err) {
+            // Usuário cancelou ou erro
+            if (err.name !== 'AbortError') {
+                showToast('❌ Share failed');
+            }
+        });
     } else {
-        showToast('📋 Copied!');
+        // Fallback: copiar apenas o texto
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(shareText).then(function() {
+                showToast('📋 Copied!');
+            }).catch(function() {
+                showToast('❌ Could not copy');
+            });
+        } else {
+            showToast('📋 ' + currentStation.name);
+        }
     }
 }
 
