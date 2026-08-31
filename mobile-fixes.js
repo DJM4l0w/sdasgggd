@@ -255,14 +255,21 @@
         });
     }
     
-    // ============ BLOQUEAR PULL TO REFRESH NO MOBILE ============
+    // ============ BLOQUEAR PULL TO REFRESH (SCROLL NORMAL FUNCIONA) ============
     function setupPullToRefreshPrevention() {
         if (!isMobile) return;
         
+        // Usar CSS para bloquear (não interfere no scroll)
+        document.body.style.overscrollBehaviorY = 'none';
+        document.documentElement.style.overscrollBehaviorY = 'none';
+        
+        // Para Chrome Android - bloquear gesto de puxar
         let startY = 0;
+        let isPullingDown = false;
         
         document.addEventListener('touchstart', function(e) {
             startY = e.touches[0].clientY;
+            isPullingDown = false;
         }, { passive: true });
         
         document.addEventListener('touchmove', function(e) {
@@ -270,12 +277,17 @@
             const deltaY = touchY - startY;
             
             // Só bloqueia se estiver NO TOPO e puxando PARA BAIXO
-            if (window.scrollY <= 0 && deltaY > 0) {
+            if (window.scrollY === 0 && deltaY > 0) {
+                isPullingDown = true;
                 e.preventDefault();
             }
         }, { passive: false });
         
-        console.log('🔒 Pull to refresh bloqueado');
+        document.addEventListener('touchend', function() {
+            isPullingDown = false;
+        });
+        
+        console.log('🔒 Pull to refresh bloqueado (scroll normal funciona)');
     }
     
     // ============ INICIALIZAÇÃO ============
@@ -291,7 +303,7 @@
         optimizePerformance();
         setupBatteryMonitoring();
         setupErrorHandling();
-        setupPullToRefreshPrevention(); // ← ADICIONADO AQUI
+        setupPullToRefreshPrevention();
         
         // Registrar Service Worker
         if ('serviceWorker' in navigator) {
