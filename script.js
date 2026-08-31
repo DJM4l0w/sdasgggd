@@ -13,21 +13,6 @@ var currentGenre = 'all';
 var searchQuery = '';
 var isApiLoading = false;
 
-var API = 'https://de1.api.radio-browser.info/json';
-var allStations = [];
-var currentList = [];
-var currentPage = 1;
-var PAGE_SIZE = 50;
-var isLoading = false;
-var currentStation = null;
-var audio = new Audio();
-var isPlaying = false;
-var favorites = new Set(JSON.parse(localStorage.getItem('m4fmfavs') || '[]'));
-var favStations = JSON.parse(localStorage.getItem('m4fmfavStations') || '[]');
-var currentGenre = 'all';
-var searchQuery = '';
-var isApiLoading = false;
-
 // ============ TOP 50 COM FOTOS ============
 var top50Stations = [
     {name: "BBC Radio 1", country: "UK", bitrate: 128, favicon: "https://radio.bradford.edu/wp-content/uploads/2020/01/bbc-radio-1.png", tags: "pop,top40", url_resolved: "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_one", stationuuid: "top01"},
