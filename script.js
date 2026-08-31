@@ -15,8 +15,6 @@ var searchQuery = '';
 var isApiLoading = false;
 var hasInitialLoaded = false;
 var db = null;
-var touchStartX = 0;
-var touchEndX = 0;
 var sleepTimer = null;
 
 var genres = [
@@ -41,7 +39,6 @@ var genres = [
 document.addEventListener('DOMContentLoaded', function() {
     initDB();
     setupSearchEvents();
-    setupSwipeGestures();
     setupKeyboardShortcuts();
     setupMediaSession();
     setupAutoRefresh();
@@ -61,26 +58,6 @@ function hideSplashScreen() {
     }
 }
 
-// ============ SWIPE GESTURES ============
-function setupSwipeGestures() {
-    document.addEventListener('touchstart', function(e) {
-        touchStartX = e.changedTouches[0].screenX;
-    }, {passive: true});
-    
-    document.addEventListener('touchend', function(e) {
-        touchEndX = e.changedTouches[0].screenX;
-        var diff = touchStartX - touchEndX;
-        
-        if (Math.abs(diff) > 80) {
-            if (diff > 0) {
-                nextStation();
-            } else {
-                prevStation();
-            }
-        }
-    }, {passive: true});
-}
-
 // ============ KEYBOARD SHORTCUTS ============
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', function(e) {
@@ -96,7 +73,7 @@ function setupKeyboardShortcuts() {
     });
 }
 
-// ============ MEDIA SESSION (Controle na notificação) ============
+// ============ MEDIA SESSION ============
 function setupMediaSession() {
     if ('mediaSession' in navigator) {
         navigator.mediaSession.setActionHandler('play', function() {
@@ -136,7 +113,7 @@ function updateMediaSession() {
     });
 }
 
-// ============ AUTO REFRESH (a cada 30 min) ============
+// ============ AUTO REFRESH ============
 function setupAutoRefresh() {
     setInterval(function() {
         if (!isApiLoading && navigator.onLine && hasInitialLoaded) {
@@ -148,7 +125,6 @@ function setupAutoRefresh() {
 // ============ SLEEP TIMER ============
 function setSleepTimer(minutes) {
     clearTimeout(sleepTimer);
-    
     showToast('⏰ Sleep timer: ' + minutes + ' min');
     
     sleepTimer = setTimeout(function() {
@@ -524,7 +500,7 @@ function goToPage(page) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ============ GENRES ============
+// ============ GENRES (COM BOTÃO ALL CORRIGIDO) ============
 function renderGenres() {
     var scroll = document.getElementById('genresScroll');
     scroll.innerHTML = '';
@@ -537,7 +513,26 @@ function renderGenres() {
             currentGenre = g.tag;
             document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('active'); });
             chip.classList.add('active');
-            filterStations();
+            
+            // SE CLICAR EM "ALL" - RESET COMPLETO
+            if (g.tag === 'all') {
+                searchQuery = '';
+                var searchInput = document.getElementById('searchInput');
+                if (searchInput) searchInput.value = '';
+                
+                currentList = allStations;
+                currentPage = 1;
+                totalPages = Math.ceil(allStations.length / PAGE_SIZE);
+                
+                document.getElementById('stationList').innerHTML = '';
+                document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' Stations';
+                
+                setupPagination();
+                goToPage(1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                filterStations();
+            }
         };
         scroll.appendChild(chip);
     });
