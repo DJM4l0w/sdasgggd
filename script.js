@@ -7,10 +7,11 @@ var isLoading = false;
 var currentStation = null;
 var audio = new Audio();
 var isPlaying = false;
-var favorites = new Set(JSON.parse(localStorage.getItem('favs') || '[]'));
-var favStations = JSON.parse(localStorage.getItem('favStations') || '[]');
+var favorites = new Set(JSON.parse(localStorage.getItem('m4fmfavs') || '[]'));
+var favStations = JSON.parse(localStorage.getItem('m4fmfavStations') || '[]');
 var currentGenre = 'all';
 var searchQuery = '';
+var hasLoaded = false;
 
 var genres = [
     {name:'All', tag:'all', emoji:'🌍'},
@@ -37,90 +38,114 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function init() {
     renderGenres();
-    loadWorldStations();
+    loadStationsFast();
     updateFavCount();
 }
 
-async function loadWorldStations() {
-    showLoading();
+// ============ CARREGAMENTO RÁPIDO ============
+async function loadStationsFast() {
+    var listElement = document.getElementById('stationList');
+    listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">Carregando...</p></div>';
     
     try {
+        // Carregar 500 mais populares de UMA VEZ
+        var response = await fetch(API + '/stations/topvote/500?hidebroken=true');
+        var data = await response.json();
+        
+        allStations = data.filter(function(s) {
+            return s.url_resolved;
+        });
+        
+        currentList = allStations;
+        
+        document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' Rádios Populares';
+        document.getElementById('stationList').innerHTML = '';
+        
+        // Mostrar primeiro lote imediatamente
+        loadMore();
+        
+        // Carregar mais em background
+        loadMoreStationsInBackground();
+        
+    } catch(e) {
+        listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ Erro. Tente novamente.</p>';
+    }
+}
+
+// ============ CARREGAR MAIS EM BACKGROUND ============
+async function loadMoreStationsInBackground() {
+    try {
         var unique = {};
-        var results = [];
         
-        // Top 1000 world stations
-        var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
-        var topData = await topRes.json();
-        
-        topData.forEach(function(s) {
-            if (s.url_resolved && !unique[s.stationuuid]) {
-                unique[s.stationuuid] = true;
-                results.push(s);
-            }
+        // Adicionar estações já carregadas
+        allStations.forEach(function(s) {
+            unique[s.stationuuid] = true;
         });
         
-        updateLoadingText(results.length);
-        
-        // Countries - 300 each
-        var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA','EG','NG','KE','MA','AE','SA','TR','PL','SE','NO','DK','FI','IE','AT','CH','BE','GR','CZ','HU','RO'];
-        
-        var countryPromises = countries.map(function(code) {
-            return fetch(API + '/stations/bycountrycodeexact/' + code + '?limit=300&hidebroken=true&order=clickcount&reverse=true')
-                .then(function(r) { return r.json(); })
-                .catch(function() { return []; });
-        });
-        
-        var countryResults = await Promise.all(countryPromises);
-        
-        countryResults.forEach(function(stations) {
-            stations.forEach(function(s) {
-                if (s.url_resolved && !unique[s.stationuuid]) {
-                    unique[s.stationuuid] = true;
-                    results.push(s);
-                }
-            });
-        });
-        
-        updateLoadingText(results.length);
-        
-        // Genres - 400 each
-        var genrePromises = genres.slice(1).map(function(g) {
-            return fetch(API + '/stations/search?tag=' + g.tag + '&limit=400&hidebroken=true&order=clickcount&reverse=true')
+        // Carregar por gêneros em paralelo (rápido)
+        var genrePromises = genres.slice(1, 8).map(function(g) {
+            return fetch(API + '/stations/search?tag=' + g.tag + '&limit=200&hidebroken=true&order=clickcount&reverse=true')
                 .then(function(r) { return r.json(); })
                 .catch(function() { return []; });
         });
         
         var genreResults = await Promise.all(genrePromises);
         
+        var newStations = [];
+        
         genreResults.forEach(function(stations) {
             stations.forEach(function(s) {
                 if (s.url_resolved && !unique[s.stationuuid]) {
                     unique[s.stationuuid] = true;
-                    results.push(s);
+                    newStations.push(s);
                 }
             });
         });
         
-        allStations = results;
-        currentList = allStations;
+        // Adicionar novas estações
+        allStations = allStations.concat(newStations);
         
-        document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' World Stations';
-        document.getElementById('stationList').innerHTML = '';
-        loadMore();
+        // Atualizar título
+        document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' Rádios';
+        
+        // Carregar países em background
+        loadCountriesInBackground(unique);
         
     } catch(e) {
-        document.getElementById('stationList').innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ Error loading. Check connection.</p>';
+        console.log('Background load error:', e);
     }
 }
 
-function updateLoadingText(count) {
-    document.getElementById('stationList').innerHTML = 
-        '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">Loading ' + count + ' stations...</p></div>';
-}
-
-function showLoading() {
-    document.getElementById('stationList').innerHTML = 
-        '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">Loading world stations...</p></div>';
+async function loadCountriesInBackground(unique) {
+    try {
+        var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO'];
+        
+        var countryPromises = countries.map(function(code) {
+            return fetch(API + '/stations/bycountrycodeexact/' + code + '?limit=200&hidebroken=true&order=clickcount&reverse=true')
+                .then(function(r) { return r.json(); })
+                .catch(function() { return []; });
+        });
+        
+        var countryResults = await Promise.all(countryPromises);
+        
+        var newStations = [];
+        
+        countryResults.forEach(function(stations) {
+            stations.forEach(function(s) {
+                if (s.url_resolved && !unique[s.stationuuid]) {
+                    unique[s.stationuuid] = true;
+                    newStations.push(s);
+                }
+            });
+        });
+        
+        allStations = allStations.concat(newStations);
+        
+        document.getElementById('listTitle').textContent = '🌍 ' + allStations.length + ' Rádios';
+        
+    } catch(e) {
+        console.log('Country load error:', e);
+    }
 }
 
 function renderGenres() {
@@ -163,7 +188,7 @@ function filterStations() {
     currentPage = 1;
     document.getElementById('stationList').innerHTML = '';
     document.getElementById('endMessage').style.display = 'none';
-    document.getElementById('listTitle').textContent = filtered.length + ' Stations';
+    document.getElementById('listTitle').textContent = filtered.length + ' Rádios';
     loadMore();
 }
 
@@ -179,7 +204,6 @@ function loadMore() {
     }
     
     isLoading = true;
-    document.getElementById('loadingMore').style.display = 'block';
     
     var fragment = document.createDocumentFragment();
     
@@ -190,7 +214,6 @@ function loadMore() {
     document.getElementById('stationList').appendChild(fragment);
     currentPage++;
     isLoading = false;
-    document.getElementById('loadingMore').style.display = 'none';
 }
 
 function createCard(station) {
@@ -226,15 +249,15 @@ function toggleFav(uuid) {
     if (favorites.has(uuid)) {
         favorites.delete(uuid);
         favStations = favStations.filter(function(s) { return s.stationuuid !== uuid; });
-        showToast('💔 Removed');
+        showToast('💔 Removido');
     } else {
         favorites.add(uuid);
         favStations.push(station);
-        showToast('❤️ Added!');
+        showToast('❤️ Adicionado!');
     }
     
-    localStorage.setItem('favs', JSON.stringify(Array.from(favorites)));
-    localStorage.setItem('favStations', JSON.stringify(favStations));
+    localStorage.setItem('m4fmfavs', JSON.stringify(Array.from(favorites)));
+    localStorage.setItem('m4fmfavStations', JSON.stringify(favStations));
     updateFavCount();
     
     document.querySelectorAll('.station-card').forEach(function(c) {
@@ -251,15 +274,15 @@ function updateFavCount() {
 
 function showFavorites() {
     if (favStations.length === 0) {
-        document.getElementById('stationList').innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">💔 No favorites yet</p>';
-        document.getElementById('listTitle').textContent = 'Favorites';
+        document.getElementById('stationList').innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">💔 Nenhum favorito</p>';
+        document.getElementById('listTitle').textContent = 'Favoritos';
         return;
     }
     
     currentList = favStations;
     currentPage = 1;
     document.getElementById('stationList').innerHTML = '';
-    document.getElementById('listTitle').textContent = '❤️ ' + favStations.length + ' Favorites';
+    document.getElementById('listTitle').textContent = '❤️ ' + favStations.length + ' Favoritos';
     loadMore();
 }
 
@@ -280,7 +303,7 @@ function playStation(station) {
         var card = document.querySelector('[data-uuid="' + station.stationuuid + '"]');
         if (card) card.classList.add('playing');
     }).catch(function() {
-        showToast('❌ Error playing');
+        showToast('❌ Erro');
     });
 }
 
@@ -305,7 +328,7 @@ function updatePlayerUI() {
     
     document.getElementById('miniImg').innerHTML = img;
     document.getElementById('miniName').textContent = currentStation.name;
-    document.getElementById('miniStatus').textContent = isPlaying ? '🔴 LIVE' : '⏸️ Paused';
+    document.getElementById('miniStatus').textContent = isPlaying ? '🔴 AO VIVO' : '⏸️ Pausado';
     document.getElementById('miniPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
     
     document.getElementById('playerArtwork').innerHTML = img;
@@ -314,7 +337,7 @@ function updatePlayerUI() {
         (currentStation.country || '') + ' · ' + (currentStation.bitrate || '') + ' kbps';
     document.getElementById('mainPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
     document.getElementById('favBtn').textContent = 
-        favorites.has(currentStation.stationuuid) ? '❤️ Favorited' : '🤍 Favorite';
+        favorites.has(currentStation.stationuuid) ? '❤️ Favoritado' : '🤍 Favoritar';
 }
 
 function openPlayer() { document.getElementById('playerModal').style.display = 'flex'; }
@@ -335,14 +358,16 @@ function setVolume(v) { audio.volume = v / 100; }
 function shareStation() {
     if (!currentStation) return;
     
+    var shareText = 'Estou ouvindo a rádio ' + currentStation.name + ' agora no melhor aplicativo M4FMCLUB! 📻🎵';
+    
     if (navigator.share) {
         navigator.share({
-            title: currentStation.name,
-            text: '🎵 Listening to ' + currentStation.name + ' on RadioHub!',
+            title: 'M4FMCLUB - ' + currentStation.name,
+            text: shareText,
             url: currentStation.homepage || window.location.href
         }).catch(function() {});
     } else {
-        showToast('📋 Copied!');
+        showToast('📋 Copiado!');
     }
 }
 
