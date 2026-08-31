@@ -1,6 +1,5 @@
 const API = 'https://de1.api.radio-browser.info/json';
 let allStations = [];
-let displayedStations = [];
 let currentPage = 1;
 const PAGE_SIZE = 50;
 let isLoading = false;
@@ -9,8 +8,11 @@ let currentList = [];
 let audio = new Audio();
 let isPlaying = false;
 let favorites = new Set(JSON.parse(localStorage.getItem('radioFavs') || '[]'));
+let favoriteStations = JSON.parse(localStorage.getItem('radioFavStations') || '[]');
 let currentGenre = 'all';
 let searchQuery = '';
+let hasLoadedAll = false;
+let recentlyPlayed = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
 
 const genres = [
     { name: 'All', tag: 'all', emoji: '🌐' },
@@ -35,182 +37,183 @@ document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
     renderGenres();
-    await loadAllStations();
+    showLoading(true);
+    await loadStationsFast();
+    showLoading(false);
     applyFilter();
     updateFavCount();
     setupInfiniteScroll();
 }
 
-async function loadAllStations() {
-    showLoading(true);
+// ============ SISTEMA DE FAVORITOS COMPLETO ============
+function toggleFavorite(station) {
+    const targetStation = station || currentStation;
+    if (!targetStation) return;
     
-    try {
-        const genrePromises = genres.slice(1).map(g =>
-            fetch(`${API}/stations/search?tag=${g.tag}&limit=500&order=clickcount&reverse=true&hidebroken=true`)
-                .then(r => r.json())
-                .catch(() => [])
-        );
-        
-        const results = await Promise.all(genrePromises);
-        const unique = new Map();
-        
-        results.flat().forEach(s => {
-            if (s.stationuuid && s.url_resolved && !unique.has(s.stationuuid)) {
-                unique.set(s.stationuuid, s);
-            }
+    const uuid = targetStation.stationuuid;
+    
+    if (favorites.has(uuid)) {
+        // Remover dos favoritos
+        favorites.delete(uuid);
+        favoriteStations = favoriteStations.filter(s => s.stationuuid !== uuid);
+        showToast('💔 Removed from favorites');
+    } else {
+        // Adicionar aos favoritos
+        favorites.add(uuid);
+        favoriteStations.push({
+            stationuuid: uuid,
+            name: targetStation.name,
+            favicon: targetStation.favicon,
+            country: targetStation.country,
+            tags: targetStation.tags,
+            url_resolved: targetStation.url_resolved,
+            bitrate: targetStation.bitrate,
+            addedAt: new Date().toISOString()
         });
-        
-        allStations = Array.from(unique.values());
-        console.log(`Loaded ${allStations.length} stations`);
-        
-    } catch(e) {
-        console.error('Load error:', e);
+        showToast('❤️ Added to favorites!');
     }
     
-    showLoading(false);
+    // Salvar no localStorage
+    localStorage.setItem('radioFavs', JSON.stringify([...favorites]));
+    localStorage.setItem('radioFavStations', JSON.stringify(favoriteStations));
+    
+    updateFavCount();
+    updatePlayerUI();
+    updateAllCards();
 }
 
-function renderGenres() {
-    const grid = document.getElementById('genresGrid');
-    grid.innerHTML = '';
-    
-    genres.forEach(g => {
-        const btn = document.createElement('button');
-        btn.className = 'genre-btn' + (g.tag === currentGenre ? ' active' : '');
-        btn.innerHTML = `<span class="emoji">${g.emoji}</span>${g.name}`;
-        btn.onclick = () => {
-            currentGenre = g.tag;
-            currentPage = 1;
-            document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            applyFilter();
-        };
-        grid.appendChild(btn);
-    });
-}
-
-function applyFilter() {
-    let filtered = allStations;
-    
-    if (currentGenre !== 'all') {
-        filtered = allStations.filter(s => s.tags?.toLowerCase().includes(currentGenre));
-    }
-    
-    if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        filtered = filtered.filter(s =>
-            s.name?.toLowerCase().includes(q) ||
-            s.tags?.toLowerCase().includes(q) ||
-            s.country?.toLowerCase().includes(q)
-        );
-    }
-    
-    currentList = filtered;
-    currentPage = 1;
-    displayedStations = [];
-    document.getElementById('stationList').innerHTML = '';
-    document.getElementById('endMessage').style.display = 'none';
-    
-    loadMoreStations();
-}
-
-function loadMoreStations() {
-    if (isLoading) return;
-    
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const batch = currentList.slice(start, start + PAGE_SIZE);
-    
-    if (batch.length === 0) {
-        document.getElementById('endMessage').style.display = 'block';
-        document.getElementById('loadingMore').style.display = 'none';
-        return;
-    }
-    
-    isLoading = true;
-    document.getElementById('loadingMore').style.display = 'block';
-    
-    setTimeout(() => {
-        batch.forEach(station => {
-            document.getElementById('stationList').appendChild(createCard(station));
-        });
-        
-        currentPage++;
-        isLoading = false;
-        document.getElementById('loadingMore').style.display = 'none';
-    }, 100);
-}
-
-function createCard(station) {
-    const card = document.createElement('div');
-    card.className = 'station-card';
-    if (currentStation?.stationuuid === station.stationuuid) card.classList.add('playing');
-    
-    const img = station.favicon ?
-        `<img src="${station.favicon}" loading="lazy" onerror="this.parentElement.innerHTML='📻'">` : '📻';
-    
-    card.innerHTML = `
-        <div class="station-img">${img}</div>
-        <div class="station-info">
-            <h3>${station.name || 'Unknown'}</h3>
-            <p>${station.country || ''}${station.state ? ' · ' + station.state : ''}${station.bitrate ? ' · ' + station.bitrate + 'kbps' : ''}</p>
-        </div>
-    `;
-    
-    card.onclick = () => playStation(station);
-    return card;
-}
-
-function setupInfiniteScroll() {
-    window.addEventListener('scroll', () => {
-        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
-            loadMoreStations();
+function updateAllCards() {
+    document.querySelectorAll('.station-card').forEach(card => {
+        const uuid = card.dataset.uuid;
+        const favBtn = card.querySelector('.card-fav-btn');
+        if (favBtn) {
+            favBtn.textContent = favorites.has(uuid) ? '❤️' : '🤍';
         }
     });
 }
 
-function debounceSearch(query) {
-    clearTimeout(window.searchTimeout);
-    window.searchTimeout = setTimeout(() => {
-        searchQuery = query;
-        currentPage = 1;
-        document.getElementById('stationList').innerHTML = '';
-        applyFilter();
-    }, 300);
+function showFavorites() {
+    if (favoriteStations.length === 0) {
+        document.getElementById('stationList').innerHTML = `
+            <div style="text-align:center;padding:60px 20px;">
+                <p style="font-size:3rem;margin-bottom:15px;">💔</p>
+                <h3 style="margin-bottom:10px;">No favorites yet</h3>
+                <p style="color:#606070;margin-bottom:20px;">Tap the heart icon on any station to add it here</p>
+                <button onclick="showAllStations()" style="padding:12px 24px;background:#6c63ff;border:none;border-radius:25px;color:white;cursor:pointer;">
+                    Browse Stations
+                </button>
+            </div>
+        `;
+        document.getElementById('sectionTitle').textContent = '❤️ Favorites';
+        return;
+    }
+    
+    currentList = favoriteStations;
+    currentPage = 1;
+    document.getElementById('stationList').innerHTML = '';
+    document.getElementById('sectionTitle').textContent = `❤️ Favorites (${favoriteStations.length})`;
+    document.getElementById('endMessage').style.display = 'none';
+    loadMoreStations();
 }
 
-async function playStation(station) {
-    if (!station.url_resolved) {
+function showAllStations() {
+    currentGenre = 'all';
+    searchQuery = '';
+    document.getElementById('searchInput').value = '';
+    applyFilter();
+}
+
+// ============ SHARE CORRIGIDO ============
+async function shareStation(station) {
+    const targetStation = station || currentStation;
+    if (!targetStation) return;
+    
+    const shareData = {
+        title: targetStation.name,
+        text: `🎵 Listening to ${targetStation.name}${targetStation.country ? ' from ' + targetStation.country : ''} on RadioHub!`,
+        url: targetStation.homepage || window.location.href
+    };
+    
+    try {
+        if (navigator.share) {
+            await navigator.share(shareData);
+            showToast('✅ Shared successfully!');
+        } else if (navigator.clipboard) {
+            await navigator.clipboard.writeText(
+                `${targetStation.name} - ${targetStation.url_resolved || targetStation.homepage || ''}`
+            );
+            showToast('📋 Station link copied!');
+        } else {
+            // Fallback
+            const textArea = document.createElement('textarea');
+            textArea.value = targetStation.url_resolved || targetStation.homepage || targetStation.name;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('📋 Link copied!');
+        }
+    } catch(e) {
+        console.error('Share error:', e);
+        showToast('❌ Could not share');
+    }
+}
+
+// ============ PLAYER MODERNO ============
+async function playStation(station, list) {
+    if (!station || !station.url_resolved) {
         showToast('❌ No stream available');
         return;
     }
     
+    if (currentStation) {
+        audio.pause();
+    }
+    
     currentStation = station;
+    if (list) currentList = list;
+    
+    // Adicionar aos recentes
+    addToRecentlyPlayed(station);
     
     try {
         audio.src = station.url_resolved;
+        audio.load();
         await audio.play();
         isPlaying = true;
         
         document.getElementById('miniPlayer').style.display = 'block';
         updatePlayerUI();
+        updatePlayingCard();
+        animatePlayerArtwork();
         showToast('▶️ ' + station.name);
         
-        document.querySelectorAll('.station-card').forEach(c => c.classList.remove('playing'));
-        document.querySelectorAll('.station-card').forEach(c => {
-            if (c.querySelector('h3')?.textContent === station.name) c.classList.add('playing');
-        });
-        
     } catch(e) {
-        showToast('❌ Error playing');
+        console.error('Play error:', e);
+        showToast('❌ Error playing station');
     }
 }
 
-function togglePlay() {
-    if (!currentStation) return;
-    if (isPlaying) audio.pause();
-    else audio.play();
-    isPlaying = !isPlaying;
-    updatePlayerUI();
+function addToRecentlyPlayed(station) {
+    recentlyPlayed = recentlyPlayed.filter(s => s.stationuuid !== station.stationuuid);
+    recentlyPlayed.unshift({
+        stationuuid: station.stationuuid,
+        name: station.name,
+        favicon: station.favicon,
+        country: station.country,
+        playedAt: new Date().toISOString()
+    });
+    recentlyPlayed = recentlyPlayed.slice(0, 20);
+    localStorage.setItem('recentlyPlayed', JSON.stringify(recentlyPlayed));
+}
+
+function animatePlayerArtwork() {
+    const artwork = document.getElementById('playerArtwork');
+    if (artwork) {
+        artwork.style.animation = 'none';
+        artwork.offsetHeight; // Trigger reflow
+        artwork.style.animation = 'pulse 2s ease-in-out infinite';
+    }
 }
 
 function updatePlayerUI() {
@@ -219,86 +222,143 @@ function updatePlayerUI() {
     const img = currentStation.favicon ?
         `<img src="${currentStation.favicon}" onerror="this.parentElement.innerHTML='📻'">` : '📻';
     
+    // Mini Player
     document.getElementById('miniImg').innerHTML = img;
     document.getElementById('miniName').textContent = currentStation.name;
-    document.getElementById('miniStatus').textContent = isPlaying ? 'Playing...' : 'Paused';
+    document.getElementById('miniStatus').textContent = isPlaying ? '🔴 LIVE' : '⏸️ Paused';
     document.getElementById('miniPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
     
+    // Full Player
     document.getElementById('playerArtwork').innerHTML = img;
     document.getElementById('playerName').textContent = currentStation.name;
     document.getElementById('playerInfo').textContent = 
-        `${currentStation.tags?.split(',')[0] || 'Unknown'} · ${currentStation.country || ''}`;
+        `${currentStation.tags ? currentStation.tags.split(',')[0] : 'Unknown'} · ${currentStation.country || 'Unknown'}`;
     document.getElementById('mainPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
     document.getElementById('favBtn').textContent = 
-        favorites.has(currentStation.stationuuid) ? '❤️ Favorite' : '🤍 Favorite';
+        favorites.has(currentStation.stationuuid) ? '❤️ Favorited' : '🤍 Add to Favorites';
+    document.getElementById('favBtn').classList.toggle('favorited', favorites.has(currentStation.stationuuid));
 }
 
-function openPlayer() { document.getElementById('playerModal').style.display = 'flex'; }
-function closePlayer() { document.getElementById('playerModal').style.display = 'none'; }
-
-function prevStation() {
-    const idx = currentList.findIndex(s => s.stationuuid === currentStation?.stationuuid);
-    if (idx > 0) playStation(currentList[idx - 1]);
+function updatePlayingCard() {
+    document.querySelectorAll('.station-card').forEach(c => c.classList.remove('playing'));
+    
+    if (currentStation) {
+        const currentCard = document.querySelector(`[data-uuid="${currentStation.stationuuid}"]`);
+        if (currentCard) {
+            currentCard.classList.add('playing');
+            currentCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
 }
 
-function nextStation() {
-    const idx = currentList.findIndex(s => s.stationuuid === currentStation?.stationuuid);
-    if (idx < currentList.length - 1) playStation(currentList[idx + 1]);
-}
-
-function toggleFavorite() {
+function togglePlay() {
     if (!currentStation) return;
     
-    if (favorites.has(currentStation.stationuuid)) {
-        favorites.delete(currentStation.stationuuid);
-        showToast('Removed');
+    if (isPlaying) {
+        audio.pause();
+        isPlaying = false;
     } else {
-        favorites.add(currentStation.stationuuid);
-        showToast('❤️ Added!');
+        audio.play().catch(() => showToast('❌ Error playing'));
+        isPlaying = true;
     }
     
-    localStorage.setItem('radioFavs', JSON.stringify([...favorites]));
-    updateFavCount();
     updatePlayerUI();
 }
 
-function updateFavCount() {
-    document.getElementById('favCount').textContent = favorites.size;
+// ============ CREATE CARD COM FAVORITO ============
+function createCard(station) {
+    const card = document.createElement('div');
+    card.className = 'station-card';
+    card.dataset.uuid = station.stationuuid;
+    
+    if (currentStation && currentStation.stationuuid === station.stationuuid) {
+        card.classList.add('playing');
+    }
+    
+    const img = station.favicon ?
+        `<img src="${station.favicon}" loading="lazy" onerror="this.parentElement.innerHTML='📻'">` : '📻';
+    
+    const isFav = favorites.has(station.stationuuid);
+    
+    card.innerHTML = `
+        <div class="station-img">${img}</div>
+        <div class="station-info">
+            <h3>${station.name || 'Unknown'}</h3>
+            <p>${station.country || ''}${station.state ? ' · ' + station.state : ''}${station.bitrate ? ' · ' + station.bitrate + 'kbps' : ''}</p>
+        </div>
+        <button class="card-fav-btn" onclick="event.stopPropagation(); toggleFavoriteStation('${station.stationuuid}')">
+            ${isFav ? '❤️' : '🤍'}
+        </button>
+    `;
+    
+    card.addEventListener('click', () => playStation(station, currentList));
+    return card;
 }
 
-function showFavorites() {
-    currentList = allStations.filter(s => favorites.has(s.stationuuid));
-    currentPage = 1;
-    document.getElementById('stationList').innerHTML = '';
-    document.getElementById('sectionTitle').textContent = '❤️ Favorites';
-    loadMoreStations();
-}
-
-function setVolume(v) { audio.volume = v / 100; }
-
-function shareStation() {
-    if (!currentStation) return;
-    if (navigator.share) {
-        navigator.share({ title: currentStation.name, text: `Listening to ${currentStation.name}!` }).catch(() => {});
-    } else {
-        showToast('📋 Copied!');
+function toggleFavoriteStation(uuid) {
+    const station = allStations.find(s => s.stationuuid === uuid) || 
+                    favoriteStations.find(s => s.stationuuid === uuid);
+    if (station) {
+        toggleFavorite(station);
     }
 }
 
-function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2000);
+// ============ NAVEGAÇÃO ============
+function prevStation() {
+    if (!currentList.length) return;
+    const idx = currentList.findIndex(s => s.stationuuid === currentStation?.stationuuid);
+    if (idx > 0) playStation(currentList[idx - 1], currentList);
+    else showToast('📻 Already at first station');
 }
 
-function showLoading(show) {
-    if (show) {
-        document.getElementById('stationList').innerHTML = 
-            '<div style="text-align:center;padding:40px;"><div class="spinner"></div><p style="color:#606070;">Loading stations...</p></div>';
+function nextStation() {
+    if (!currentList.length) return;
+    const idx = currentList.findIndex(s => s.stationuuid === currentStation?.stationuuid);
+    if (idx < currentList.length - 1) playStation(currentList[idx + 1], currentList);
+    else showToast('📻 Already at last station');
+}
+
+// ============ VOLUME ============
+function setVolume(v) {
+    audio.volume = v / 100;
+    showToast(`🔊 Volume: ${v}%`);
+}
+
+// ============ TOAST MELHORADO ============
+function showToast(msg, icon = '') {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    
+    toast.textContent = icon ? `${icon} ${msg}` : msg;
+    toast.classList.add('show');
+    
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ============ AUDIO EVENTS ============
+audio.addEventListener('playing', () => { 
+    isPlaying = true; 
+    updatePlayerUI(); 
+});
+
+audio.addEventListener('pause', () => { 
+    isPlaying = false; 
+    updatePlayerUI(); 
+});
+
+audio.addEventListener('error', () => { 
+    isPlaying = false; 
+    updatePlayerUI();
+    showToast('❌ Stream error'); 
+});
+
+audio.addEventListener('waiting', () => {
+    document.getElementById('miniStatus').textContent = '🔄 Buffering...';
+});
+
+audio.addEventListener('canplay', () => {
+    if (isPlaying) {
+        document.getElementById('miniStatus').textContent = '🔴 LIVE';
     }
-}
-
-audio.addEventListener('playing', () => { isPlaying = true; updatePlayerUI(); });
-audio.addEventListener('pause', () => { isPlaying = false; updatePlayerUI(); });
-audio.addEventListener('error', () => { isPlaying = false; showToast('❌ Stream error'); });
+});
