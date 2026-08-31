@@ -43,12 +43,11 @@ var countryFactors = {
     'IQ': 500, 'SY': 200, 'LB': 300, 'IL': 600, 'JO': 300,
     'SA': 700, 'AE': 600, 'QA': 200, 'KW': 200, 'BH': 100,
     'OM': 200, 'YE': 200, 'CY': 200, 'MT': 100, 'LU': 200,
-    'IS': 100, 'EE': 200, 'LV': 200, 'LT': 300, 'BY': 500,
+    'EE': 200, 'LV': 200, 'LT': 300, 'BY': 500,
     'MD': 300, 'AL': 200, 'MK': 200, 'BA': 300, 'ME': 100,
     'XK': 100, 'GE': 200, 'AM': 200, 'AZ': 300
 };
 
-// ============ FATORES POR GÊNERO ============
 var genreFactors = {
     'pop': 1.5, 'rock': 1.3, 'electronic': 1.2, 'dance': 1.4,
     'jazz': 0.7, 'classical': 0.6, 'news': 1.1, 'sport': 1.0,
@@ -89,6 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
     hideSplashScreen();
     getUserIP();
     startGlobalSimulation();
+    // REMOVIDO: bindPlayerFavButton() - causava conflito com onclick
 });
 
 // ============ SISTEMA DE SIMULAÇÃO GLOBAL ============
@@ -123,23 +123,19 @@ function getSimulationData(station) {
 function calculateBaseListeners(station) {
     var base = 50;
     
-    // Fator por país
     if (station.countrycode && countryFactors[station.countrycode]) {
         base = countryFactors[station.countrycode];
     } else {
         base = Math.floor(Math.random() * 500) + 100;
     }
     
-    // Fator por votos
     if (station.votes) {
         base += Math.min(station.votes, 3000);
     }
     
-    // Fator por bitrate
     if (station.bitrate > 128) base *= 1.2;
     if (station.bitrate < 64) base *= 0.7;
     
-    // Fator por gênero
     if (station.tags) {
         var tags = station.tags.toLowerCase().split(',');
         tags.forEach(function(tag) {
@@ -156,7 +152,6 @@ function updateSimulation() {
     var hour = now.getHours();
     var hourFactor = getHourFactor(hour);
     
-    // Atualizar TODAS as estações na simulação
     Object.keys(globalSimulation).forEach(function(key) {
         var station = globalSimulation[key];
         var target = station.baseListeners * hourFactor + (Math.random() * 200 - 100);
@@ -168,10 +163,8 @@ function updateSimulation() {
         station.lastUpdate = Date.now();
     });
     
-    // Salvar
     localStorage.setItem('m4fmGlobalSim', JSON.stringify(globalSimulation));
     
-    // Atualizar UI
     updateCardsWithSimulation();
     updatePlayerWithSimulation();
 }
@@ -358,7 +351,6 @@ function loadCachedStations() {
             goToPage(1);
             updateFavCount();
             updatePlayCount();
-            bindPlayerFavButton();
             setTimeout(refreshFromAPI, 1000);
         } else {
             loadFromAPI();
@@ -372,7 +364,6 @@ function loadFromAPI() {
     loadTop30First();
     updateFavCount();
     updatePlayCount();
-    bindPlayerFavButton();
 }
 
 function saveToCache(stations) {
@@ -709,7 +700,7 @@ function updatePlayCount() {
     if (countElement) countElement.textContent = count;
 }
 
-// ============ CREATE CARD (COM SIMULAÇÃO) ============
+// ============ CREATE CARD ============
 function createCard(station) {
     var card = document.createElement('div');
     card.className = 'station-card';
@@ -720,8 +711,6 @@ function createCard(station) {
     var img = station.favicon ? '<img src="' + station.favicon + '" loading="lazy" onerror="this.parentElement.innerHTML=\'📻\'">' : '📻';
     var isFav = favorites.has(station.stationuuid);
     var playCount = playHistory[station.stationuuid] ? playHistory[station.stationuuid].playCount : 0;
-    
-    // OBTER DADOS DA SIMULAÇÃO
     var simData = getSimulationData(station);
     var liveCount = simData ? simData.currentListeners : Math.floor(Math.random() * 1000) + 50;
     
@@ -794,16 +783,6 @@ function showFavorites() {
 }
 
 // ============ PLAYER ============
-function bindPlayerFavButton() {
-    var favBtn = document.getElementById('favBtn');
-    if (favBtn) {
-        favBtn.addEventListener('click', function() {
-            if (currentStation) toggleFav(currentStation.stationuuid);
-            else showToast('❌ No station playing');
-        });
-    }
-}
-
 function playStation(station) {
     if (!station || !station.url_resolved) { showToast('❌ Station unavailable'); return; }
     if (currentStation) audio.pause();
