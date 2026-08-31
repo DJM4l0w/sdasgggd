@@ -44,17 +44,14 @@ function init() {
     updateFavCount();
 }
 
-// ============ CARREGAR TOP 30 PRIMEIRO ============
 async function loadTop30First() {
     var listElement = document.getElementById('stationList');
     listElement.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="color:#606070;margin-top:15px;">Loading top 30 stations...</p></div>';
     
     try {
-        // Buscar top 30 mais votadas e funcionais
         var response = await fetch(API + '/stations/topvote/30?hidebroken=true');
         var top30 = await response.json();
         
-        // Filtrar apenas funcionais
         allStations = top30.filter(function(s) {
             return s.url_resolved && s.lastcheckok === 1;
         });
@@ -68,27 +65,22 @@ async function loadTop30First() {
         setupPagination();
         goToPage(1);
         
-        // Carregar 12000+ em background
         setTimeout(function() {
             loadAllStationsInBackground();
         }, 500);
         
     } catch(e) {
-        listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ Error loading. Check connection.</p>';
+        listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">❌ Error loading.</p>';
     }
 }
 
-// ============ CARREGAR 12000+ EM BACKGROUND ============
 async function loadAllStationsInBackground() {
     if (isApiLoading) return;
     isApiLoading = true;
     
-    console.log('📡 Loading 12000+ stations in background...');
-    
     var unique = {};
     allStations.forEach(function(s) { unique[s.stationuuid] = true; });
     
-    // 1. Top 1000
     try {
         var topRes = await fetch(API + '/stations/topvote/1000?hidebroken=true');
         var topData = await topRes.json();
@@ -98,12 +90,10 @@ async function loadAllStationsInBackground() {
                 allStations.push(s);
             }
         });
-        console.log('✅ Top 1000: ' + allStations.length);
         updateTitleBackground();
     } catch(e) {}
     
-    // 2. Todos os gêneros (30 gêneros x 200 = 6000)
-    var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie','lounge','ambient','disco','funk','soul','rnb','rap','punk','alternative','christian'];
+    var allGenres = ['dance','electronic','house','techno','trance','edm','pop','rock','jazz','classical','hiphop','country','news','sport','reggae','blues','latin','folk','metal','indie'];
     
     for (var i = 0; i < allGenres.length; i++) {
         try {
@@ -115,12 +105,10 @@ async function loadAllStationsInBackground() {
                     allStations.push(s);
                 }
             });
-            console.log('✅ ' + allGenres[i] + ': ' + allStations.length);
             updateTitleBackground();
         } catch(e) {}
     }
     
-    // 3. Países (20 países x 200 = 4000)
     var countries = ['BR','US','GB','DE','FR','ES','PT','IT','NL','CA','AU','AR','MX','CL','CO','PE','JP','KR','IN','ZA'];
     
     for (var j = 0; j < countries.length; j++) {
@@ -133,38 +121,10 @@ async function loadAllStationsInBackground() {
                     allStations.push(s);
                 }
             });
-            console.log('✅ ' + countries[j] + ': ' + allStations.length);
             updateTitleBackground();
         } catch(e) {}
     }
     
-    // 4. Buscar mais se ainda não tem 12000
-    if (allStations.length < 12000) {
-        var offset = 0;
-        while (allStations.length < 12000 && offset < 50000) {
-            try {
-                var genRes = await fetch(API + '/stations/search?limit=1000&offset=' + offset + '&hidebroken=true&order=clickcount&reverse=true');
-                var genData = await genRes.json();
-                
-                if (genData.length === 0) break;
-                
-                genData.forEach(function(s) {
-                    if (s.url_resolved && s.lastcheckok === 1 && !unique[s.stationuuid]) {
-                        unique[s.stationuuid] = true;
-                        allStations.push(s);
-                    }
-                });
-                
-                console.log('✅ Offset ' + offset + ': ' + allStations.length);
-                updateTitleBackground();
-                offset += 1000;
-            } catch(e) { break; }
-        }
-    }
-    
-    console.log('🎉 FINAL: ' + allStations.length + ' stations loaded!');
-    
-    // Atualizar paginação
     if (currentGenre === 'all' && !searchQuery) {
         currentList = allStations;
         totalPages = Math.ceil(allStations.length / PAGE_SIZE);
@@ -177,11 +137,10 @@ async function loadAllStationsInBackground() {
 function updateTitleBackground() {
     var titleElement = document.getElementById('listTitle');
     if (titleElement && hasInitialLoaded) {
-        titleElement.textContent = '🌍 ' + allStations.length + ' Stations Available';
+        titleElement.textContent = '🌍 ' + allStations.length + ' Stations';
     }
 }
 
-// ============ PAGINAÇÃO ============
 function setupPagination() {
     totalPages = Math.ceil(currentList.length / PAGE_SIZE);
     
@@ -204,14 +163,12 @@ function renderPagination() {
     
     if (totalPages <= 1) return;
     
-    // Previous
     var prevBtn = document.createElement('button');
     prevBtn.className = 'page-btn prev' + (currentPage === 1 ? ' disabled' : '');
     prevBtn.innerHTML = '‹';
     prevBtn.onclick = function() { if (currentPage > 1) goToPage(currentPage - 1); };
     container.appendChild(prevBtn);
     
-    // Page numbers
     var startPage = Math.max(1, currentPage - 2);
     var endPage = Math.min(totalPages, currentPage + 2);
     
@@ -239,7 +196,6 @@ function renderPagination() {
         container.appendChild(createPageButton(totalPages));
     }
     
-    // Next
     var nextBtn = document.createElement('button');
     nextBtn.className = 'page-btn next' + (currentPage === totalPages ? ' disabled' : '');
     nextBtn.innerHTML = '›';
@@ -343,15 +299,36 @@ function createCard(station) {
             '<h3>' + station.name + '</h3>' +
             '<p>' + (station.country || '') + (station.bitrate ? ' · ' + station.bitrate + 'kbps' : '') + '</p>' +
         '</div>' +
-        '<button class="card-fav" onclick="event.stopPropagation();toggleFav(\'' + station.stationuuid + '\')">' + (isFav ? '❤️' : '🤍') + '</button>';
+        '<button class="card-fav" data-uuid="' + station.stationuuid + '">' + (isFav ? '❤️' : '🤍') + '</button>';
     
-    card.onclick = function() { playStation(station); };
+    // Usar addEventListener em vez de onclick inline
+    var favBtn = card.querySelector('.card-fav');
+    favBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleFav(station.stationuuid);
+    });
+    
+    card.addEventListener('click', function() {
+        playStation(station);
+    });
+    
     return card;
 }
 
+// ============ FAVORITOS CORRIGIDO ============
 function toggleFav(uuid) {
+    console.log('toggleFav called with:', uuid);
+    
     var station = allStations.find(function(s) { return s.stationuuid === uuid; });
-    if (!station) return;
+    
+    if (!station) {
+        station = favStations.find(function(s) { return s.stationuuid === uuid; });
+    }
+    
+    if (!station) {
+        showToast('❌ Station not found');
+        return;
+    }
     
     if (favorites.has(uuid)) {
         favorites.delete(uuid);
@@ -363,34 +340,51 @@ function toggleFav(uuid) {
         showToast('❤️ Added!');
     }
     
+    // Salvar
     localStorage.setItem('m4fmfavs', JSON.stringify(Array.from(favorites)));
     localStorage.setItem('m4fmfavStations', JSON.stringify(favStations));
+    
     updateFavCount();
     
-    document.querySelectorAll('.station-card').forEach(function(c) {
-        if (c.dataset.uuid === uuid) {
-            var btn = c.querySelector('.card-fav');
-            if (btn) btn.textContent = favorites.has(uuid) ? '❤️' : '🤍';
+    // Atualizar TODOS os botões
+    document.querySelectorAll('.card-fav').forEach(function(btn) {
+        if (btn.dataset.uuid === uuid) {
+            btn.textContent = favorites.has(uuid) ? '❤️' : '🤍';
         }
     });
+    
+    // Atualizar botão do player
+    var playerFavBtn = document.getElementById('favBtn');
+    if (playerFavBtn && currentStation && currentStation.stationuuid === uuid) {
+        playerFavBtn.textContent = favorites.has(uuid) ? '❤️ Favorited' : '🤍 Favorite';
+    }
 }
 
 function updateFavCount() {
-    document.getElementById('favCount').textContent = favorites.size;
+    var countElement = document.getElementById('favCount');
+    if (countElement) {
+        countElement.textContent = favorites.size;
+    }
 }
 
 function showFavorites() {
+    var listElement = document.getElementById('stationList');
+    var paginationElement = document.getElementById('pagination');
+    
     if (favStations.length === 0) {
-        document.getElementById('stationList').innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">💔 No favorites yet</p>';
+        listElement.innerHTML = '<p style="text-align:center;padding:40px;color:#606070;">💔 No favorites yet</p>';
         document.getElementById('listTitle').textContent = 'Favorites';
+        if (paginationElement) paginationElement.innerHTML = '';
         return;
     }
     
     currentList = favStations;
     currentPage = 1;
     totalPages = Math.ceil(favStations.length / PAGE_SIZE);
-    document.getElementById('stationList').innerHTML = '';
+    
+    listElement.innerHTML = '';
     document.getElementById('listTitle').textContent = '❤️ ' + favStations.length + ' Favorites';
+    
     setupPagination();
     goToPage(1);
 }
@@ -458,8 +452,11 @@ function updatePlayerUI() {
     document.getElementById('playerInfo').textContent = 
         (currentStation.country || '') + ' · ' + (currentStation.bitrate || '') + ' kbps';
     document.getElementById('mainPlayBtn').textContent = isPlaying ? '⏸️' : '▶️';
-    document.getElementById('favBtn').textContent = 
-        favorites.has(currentStation.stationuuid) ? '❤️ Favorited' : '🤍 Favorite';
+    
+    var favBtn = document.getElementById('favBtn');
+    if (favBtn) {
+        favBtn.textContent = favorites.has(currentStation.stationuuid) ? '❤️ Favorited' : '🤍 Favorite';
+    }
 }
 
 function openPlayer() { document.getElementById('playerModal').style.display = 'flex'; }
