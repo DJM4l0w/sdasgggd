@@ -1225,7 +1225,6 @@ function shareStation() {
                     (currentStation.country ? ' from ' + currentStation.country : '') + 
                     ' - M4FMCLUB 📻';
     
-    // Tentar compartilhamento nativo
     if (navigator.share) {
         navigator.share({
             title: 'M4FMCLUB',
@@ -1238,17 +1237,13 @@ function shareStation() {
                 showToast('❌ ' + t('error'));
             }
         });
-    } 
-    // Fallback: copiar para clipboard
-    else if (navigator.clipboard && navigator.clipboard.writeText) {
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(shareText).then(function() {
             showToast('📋 ' + t('copied'));
         }).catch(function() {
             showToast('❌ ' + t('error'));
         });
-    } 
-    // Último recurso
-    else {
+    } else {
         showToast('📋 ' + currentStation.name);
     }
 }
@@ -1271,19 +1266,6 @@ function clearSearch() {
         if (c.textContent.indexOf('All') !== -1) c.classList.add('active');
     });
     filterStations();
-}
-// ============ SHARE ============
-function shareStation() {
-    
-}
-
-// ============ SEARCH ============
-function doSearch(query) {
-    // ... código existente ...
-}
-
-function clearSearch() {
-    
 }
 
 // ============ VOLTAR PARA TELA INICIAL ============
