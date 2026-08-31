@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -8,14 +8,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="M4FMCLUB">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="description" content="M4FMCLUB - Ouça milhares de rádios online grátis no seu celular">
-    <title>M4FMCLUB - Rádios Online</title>
+    <meta name="description" content="M4FMCLUB - Stream thousands of radio stations worldwide">
+    <title>M4FMCLUB - Online Radio</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
-    <!-- Header Fixo -->
+    <!-- Header -->
     <header class="header">
         <div class="header-top">
             <h1 class="logo">📻 M4FM<span>CLUB</span></h1>
@@ -25,36 +25,31 @@
         </div>
         <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="search" id="searchInput" placeholder="Buscar rádios..." oninput="doSearch(this.value)" autocomplete="off">
+            <input type="search" id="searchInput" placeholder="Search stations..." oninput="doSearch(this.value)" autocomplete="off">
         </div>
     </header>
 
-    <!-- Gêneros -->
+    <!-- Genres -->
     <div class="genres-scroll" id="genresScroll"></div>
 
-    <!-- Lista -->
+    <!-- Main Content -->
     <main class="main-content">
-        <h2 class="section-title" id="listTitle">🌍 Rádios do Mundo</h2>
+        <h2 class="section-title" id="listTitle">Loading stations...</h2>
         <div id="stationList" class="station-list"></div>
-        <div id="loadingMore" style="display:none;text-align:center;padding:20px;">
-            <div class="spinner"></div>
-        </div>
-        <div id="endMessage" style="display:none;text-align:center;padding:20px;color:#606070;">
-            🎉 Fim da lista
-        </div>
+        <div id="pagination" class="pagination"></div>
     </main>
 
     <!-- Mini Player -->
     <div class="mini-player" id="miniPlayer" style="display:none;" onclick="openPlayer()">
         <div class="mini-img" id="miniImg">📻</div>
         <div class="mini-info">
-            <h4 id="miniName">Rádio</h4>
-            <p id="miniStatus">Tocando...</p>
+            <h4 id="miniName">Station</h4>
+            <p id="miniStatus">Playing...</p>
         </div>
         <button class="mini-btn" id="miniPlayBtn" onclick="event.stopPropagation();togglePlay()">⏸️</button>
     </div>
 
-    <!-- Player Fullscreen -->
+    <!-- Full Player Modal -->
     <div class="player-modal" id="playerModal" style="display:none;">
         <div class="modal-backdrop" onclick="closePlayer()"></div>
         <div class="player-sheet">
@@ -63,7 +58,7 @@
             
             <div class="player-artwork" id="playerArtwork">📻</div>
             
-            <h2 class="player-name" id="playerName">Rádio</h2>
+            <h2 class="player-name" id="playerName">Station Name</h2>
             <p class="player-info" id="playerInfo">Info</p>
             
             <div class="controls">
@@ -78,8 +73,8 @@
             </div>
             
             <div class="actions">
-                <button class="action-btn" id="favBtn" onclick="toggleFavorite()">🤍 Favoritar</button>
-                <button class="action-btn" onclick="shareStation()">📤 Compartilhar</button>
+                <button class="action-btn" id="favBtn" onclick="toggleFavorite()">🤍 Favorite</button>
+                <button class="action-btn" onclick="shareStation()">📤 Share</button>
             </div>
         </div>
     </div>
